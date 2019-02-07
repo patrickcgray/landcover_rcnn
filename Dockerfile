@@ -122,7 +122,7 @@ RUN pip3 install --no-cache-dir git+https://github.com/waleedka/coco.git#subdire
 #
 # Geospatial Tools
 #
-pip3 install rasterio folium fiona pyproj shapely pandas cartopy geopandas scikit-learn rtree geojson descartes
+RUN pip3 install rasterio folium fiona pyproj shapely pandas geopandas scikit-learn rtree geojson descartes
 
 WORKDIR "/root"
 CMD ["/bin/bash"]
