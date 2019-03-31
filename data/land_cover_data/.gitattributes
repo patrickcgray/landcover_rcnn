@@ -1,2 +1,0 @@
-landcover_2010.tif filter=lfs diff=lfs merge=lfs -text
-landcover_2010 filter=lfs diff=lfs merge=lfs -text
