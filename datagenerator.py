@@ -35,7 +35,7 @@ def tile_generator(image_datasets, label_dataset, tile_height, tile_width, pixel
             c, r = pixel_locations[i][0]
             dataset_index = pixel_locations[i][1]
             i += 1
-            tile = image_datasets[dataset_index].read(list(np.arange(1, band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+            tile = image_datasets[dataset_index].read(list(np.arange(1, band_count)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
             if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
                 pass
             elif np.isnan(tile).any() == True or -9999 in tile: 
