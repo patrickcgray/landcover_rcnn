@@ -39,6 +39,80 @@ class_names = dict((
 (25, 'Snow/Ice')
 ))
 
+def gen_balanced_pixel_locations(image_datasets, label_image, label_dataset, amount_of_labels, train_count, val_count, tile_size):
+    ### this function pulls out a train_count + val_count number of random pixels from a list of raster datasets
+    ### and returns a list of training pixel locations and image indices 
+    ### and a list of validation pixel locations and indices
+    
+    train_pixels = []
+    val_pixels = []
+    
+    train_bucket_size = math.ceil(train_count / (amount_of_labels-14)) # -6 because not enough classes to fill each bucket
+    validation_bucket_size = math.ceil(val_count / (amount_of_labels-14)) #not enough classes to fill each bucket
+
+    label_image[label_image == 255] = 1
+    train_label_buckets = np.zeros(amount_of_labels)    
+    val_label_buckets = np.zeros(amount_of_labels)
+    outProj = Proj(label_dataset.crs)
+
+    buffer = math.ceil(tile_size/2)
+    
+    train_count_per_dataset = math.ceil(train_count / len(image_datasets))
+    val_count_per_dataset = math.ceil(val_count / len(image_datasets))
+    total_count_per_dataset = train_count_per_dataset + val_count_per_dataset
+    
+    for index, image_dataset in enumerate(image_datasets):
+        #randomly pick `count` num of pixels from each dataset
+        
+        img_height, img_width = image_dataset.shape
+        #rows_sub, columns_sub = zip(*random.sample(list(zip(rows, columns)), total_count))     
+        val_points = set()
+        train_points = set()
+
+        while len(val_points) != val_count_per_dataset:
+            aPoint = (random.randint(0+buffer,img_width-buffer), random.randint(0+buffer,img_height-buffer))
+            #print(aPoint)
+            #print(val_label_buckets)
+            c, r = aPoint
+            (x, y) = image_dataset.xy(r, c)
+            inProj = Proj(image_dataset.crs)
+            if inProj != outProj:
+                x,y = transform(inProj,outProj,x,y)
+                # reference gps in label_image
+            row, col = label_dataset.index(x,y)
+            label = label_image[:, row, col]
+            if val_label_buckets[label] != validation_bucket_size and label!=1 :
+                past_size = len(val_points)
+                val_points.add(aPoint)
+                if past_size != len(val_points):
+                    val_label_buckets[label] +=1
+                
+        while len(train_points) != train_count_per_dataset:   
+            aPoint = (random.randint(0+buffer,img_width-buffer), random.randint(0+buffer,img_height-buffer))
+            c, r = aPoint
+            (x, y) = image_dataset.xy(r, c)            
+            inProj = Proj(image_dataset.crs)
+            #print(train_label_buckets)
+            if inProj != outProj:
+                x,y = transform(inProj,outProj,x,y)
+                # reference gps in label_image
+            row, col = label_dataset.index(x,y)
+            label = label_image[:, row, col]
+            if (train_label_buckets[label] != train_bucket_size) and label!=1:
+                past_size = len(train_points)
+                train_points.add(aPoint)
+                if past_size != len(train_points):
+                    train_label_buckets[label] +=1
+                    
+        train_points = zip(train_points, [index]*train_count_per_dataset)
+        val_points = zip(val_points, [index]*val_count_per_dataset)        
+
+        train_pixels += train_points
+        val_pixels += val_points
+        
+        
+    return (train_pixels, val_pixels)
+
 def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
     #This function takes in a list of raster datasets and randomly samples `train_count` and `val_count` random pixels from each dataset.
     # It doesn't sample within tile_size / 2 of the edge in order to avoid missing data.
