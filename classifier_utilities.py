@@ -1,14 +1,21 @@
 import rasterio
 import numpy as np
+import random
+import math
+import itertools
+
 from rasterio.plot import adjust_band
 import matplotlib.pyplot as plt
 from rasterio.plot import reshape_as_raster, reshape_as_image
 from rasterio.plot import show
 from rasterio.windows import Window
+import rasterio.features
+import rasterio.warp
+import rasterio.mask
+
 from pyproj import Proj, transform
-import random
-import math
-import itertools
+from tqdm import tqdm
+from shapely.geometry import Polygon
 
 class_names = dict((
 (0,  'Background'),
@@ -39,79 +46,120 @@ class_names = dict((
 (25, 'Snow/Ice')
 ))
 
-def gen_balanced_pixel_locations(image_datasets, label_image, label_dataset, amount_of_labels, train_count, val_count, tile_size):
+def merge_classes(label_image):
+    # merge some of the labels
+    label_image[label_image == 255] = 1
+    # medium intensity and high intensity
+    label_image[label_image == 3] = 2
+    # low intensity and high intensity
+    label_image[label_image == 4] = 2
+    
+    # open space developed and cultivated land
+    label_image[label_image == 5] = 6
+    # pasture/hay and grassland
+    label_image[label_image == 7] = 8
+    
+    # deciduous forest and mixed forest
+    label_image[label_image == 9] = 11
+    # deciduous forest and mixed forest
+    label_image[label_image == 10] = 11
+    # deciduous forest and mixed forest
+    label_image[label_image == 12] = 11
+    # deciduous forest and mixed forest
+    label_image[label_image == 13] = 11
+    # estuarine forest wetland to palustrine forested wetland
+    label_image[label_image == 16] = 11
+    # estuarine forest wetland to palustrine forested wetland
+    label_image[label_image == 17] = 11
+    # estuarine forest wetland to palustrine forested wetland
+    label_image[label_image == 14] = 11
+    
+    # estuarine forest wetland to palustrine forested wetland
+    label_image[label_image == 15] = 18
+    
+    # estuarine forest wetland to palustrine forested wetland
+    label_image[label_image == 22] = 23
+ 
+    return(label_image)
+
+def merge_classes_lite(label_image):
+    # merge some of the labels
+    label_image[label_image == 255] = 1
+    # medium intensity and high intensity
+    label_image[label_image == 3] = 2    
+    return(label_image)
+
+
+def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset):
     ### this function pulls out a train_count + val_count number of random pixels from a list of raster datasets
     ### and returns a list of training pixel locations and image indices 
     ### and a list of validation pixel locations and indices
     
-    train_pixels = []
-    val_pixels = []
+    label_proj = Proj(label_dataset.crs)
     
-    train_bucket_size = math.ceil(train_count / (amount_of_labels-14)) # -6 because not enough classes to fill each bucket
-    validation_bucket_size = math.ceil(val_count / (amount_of_labels-14)) #not enough classes to fill each bucket
-
-    label_image[label_image == 255] = 1
-    train_label_buckets = np.zeros(amount_of_labels)    
-    val_label_buckets = np.zeros(amount_of_labels)
-    outProj = Proj(label_dataset.crs)
-
-    buffer = math.ceil(tile_size/2)
+    train_pixels = []
     
     train_count_per_dataset = math.ceil(train_count / len(image_datasets))
-    val_count_per_dataset = math.ceil(val_count / len(image_datasets))
-    total_count_per_dataset = train_count_per_dataset + val_count_per_dataset
-    
-    for index, image_dataset in enumerate(image_datasets):
-        #randomly pick `count` num of pixels from each dataset
-        
-        img_height, img_width = image_dataset.shape
-        #rows_sub, columns_sub = zip(*random.sample(list(zip(rows, columns)), total_count))     
-        val_points = set()
-        train_points = set()
+    for index, image_dataset in enumerate(tqdm(image_datasets)):
 
-        while len(val_points) != val_count_per_dataset:
-            aPoint = (random.randint(0+buffer,img_width-buffer), random.randint(0+buffer,img_height-buffer))
-            #print(aPoint)
-            #print(val_label_buckets)
-            c, r = aPoint
-            (x, y) = image_dataset.xy(r, c)
-            inProj = Proj(image_dataset.crs)
-            if inProj != outProj:
-                x,y = transform(inProj,outProj,x,y)
-                # reference gps in label_image
-            row, col = label_dataset.index(x,y)
-            label = label_image[:, row, col]
-            if val_label_buckets[label] != validation_bucket_size and label!=1 :
-                past_size = len(val_points)
-                val_points.add(aPoint)
-                if past_size != len(val_points):
-                    val_label_buckets[label] +=1
-                
-        while len(train_points) != train_count_per_dataset:   
-            aPoint = (random.randint(0+buffer,img_width-buffer), random.randint(0+buffer,img_height-buffer))
-            c, r = aPoint
-            (x, y) = image_dataset.xy(r, c)            
-            inProj = Proj(image_dataset.crs)
-            #print(train_label_buckets)
-            if inProj != outProj:
-                x,y = transform(inProj,outProj,x,y)
-                # reference gps in label_image
-            row, col = label_dataset.index(x,y)
-            label = label_image[:, row, col]
-            if (train_label_buckets[label] != train_bucket_size) and label!=1:
-                past_size = len(train_points)
-                train_points.add(aPoint)
-                if past_size != len(train_points):
-                    train_label_buckets[label] +=1
-                    
-        train_points = zip(train_points, [index]*train_count_per_dataset)
-        val_points = zip(val_points, [index]*val_count_per_dataset)        
+        # how many points from each class
+        points_per_class = train_count_per_dataset // len(class_names)
+        
+        # get landsat boundaries in this image
+        # create approx dataset mask in geographic coords
+        # this fcn maps pixel locations in (row, col) coordinates to (x, y) spatial positions
+        raster_points = image_dataset.transform * (0, 0), image_dataset.transform * (image_dataset.width, 0), image_dataset.transform * (image_dataset.width, image_dataset.height), image_dataset.transform * (0, image_dataset.height)
+        
+        l8_proj = Proj(image_dataset.crs)
+        new_raster_points = []
+        # convert the raster bounds from landsat into label crs
+        for x,y in raster_points:
+            new_raster_points.append(transform(l8_proj,label_proj,x,y))
+            
+        # turn this into a polygon
+        raster_poly = Polygon(new_raster_points)
 
-        train_pixels += train_points
-        val_pixels += val_points
+        # mask the label dataset to landsat
+        masked_label_image, masked_label_transform = rasterio.mask.mask(label_dataset, [raster_poly.__geo_interface__], crop=False)
+        masked_label_image = merge_classes_lite(masked_label_image)
+
+        all_points_per_image = []
+        # loop for each class
+        for cls in range(len(class_names)):
+            # mask the label subset image to each class
+            class_mask_image = (masked_label_image==cls).astype(int)
+            
+            # pull out the indicies where the mask is true
+            rows,cols = np.where(class_mask_image[0] == 1)
+            all_locations = list(zip(rows,cols))
+
+            # shuffle all locations
+            random.shuffle(all_locations)
+            
+            # now convert to landsat image crs
+            # TODO need to time this to see if it is slow, can probably optimize
+            l8_points = []
+            # TODO Will probably need to catch this for classes smaller than the ideal points per class
+            for r,c in all_locations[:points_per_class]:
+                # convert label row and col into label geographic space
+                x,y = label_dataset.xy(r,c)
+                # go from label projection into landsat projection
+                x,y = transform(label_proj, l8_proj,x,y)
+                # convert from landsat geographic space into row col
+                r,c = image_dataset.index(x,y)
+                l8_points.append((r,c))
+                                 
+            all_points_per_image += l8_points
+
+        dataset_index_list = [index] * len(all_points_per_image)
+
+        dataset_pixels = list(zip(all_points_per_image, dataset_index_list))
         
-        
-    return (train_pixels, val_pixels)
+        train_pixels += dataset_pixels
+            
+    random.shuffle(train_pixels)
+    return (train_pixels)
+
 
 def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
     #This function takes in a list of raster datasets and randomly samples `train_count` and `val_count` random pixels from each dataset.
@@ -151,24 +199,14 @@ def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
         
     return (train_pixels, val_pixels)
     
-def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
+def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
     # pixel locations looks like [r, c, dataset_index]
     label_image = label_dataset.read()
-    label_image[label_image == 255] = 1
     # merge some of the labels
-    # medium intensity and high intensity
-    label_image[label_image == 3] = 2
-    # open space developed and cultivated land
-    label_image[label_image == 5] = 6
-    # pasture/hay and grassland
-    label_image[label_image == 7] = 8
-    # deciduous forest and mixed forest
-    label_image[label_image == 9] = 11
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 16] = 13
+    label_image = merge_classes(label_image)
 
     c = r = 0
     i = 0
@@ -180,7 +218,8 @@ def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_hei
     # assuming all images have the same num of bands
     l8_band_count = l8_image_datasets[0].count  
     s1_band_count = s1_image_datasets[0].count
-    band_count = l8_band_count + s1_band_count
+    dem_band_count = dem_image_datasets[0].count
+    band_count = l8_band_count + s1_band_count + dem_band_count
     class_count = len(class_names)
     buffer = math.ceil(tile_height / 2)
   
@@ -192,7 +231,7 @@ def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_hei
             # if we're at the end  of the data just restart
             if i >= len(pixel_locations):
                 i=0
-            c, r = pixel_locations[i][0]
+            r, c = pixel_locations[i][0]
             dataset_index = pixel_locations[i][1]
             i += 1
             tile = l8_image_datasets[dataset_index].read(list(np.arange(1, l8_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
@@ -203,8 +242,8 @@ def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_hei
                 # this also takes a while and is inefficient
                 pass
             elif tile.shape != (l8_band_count, tile_width, tile_height):
-                print('wrong shape')
-                print(tile.shape)
+                #print('wrong shape')
+                #print(tile.shape)
                 # somehow we're randomly getting tiles without the correct dimensions
                 pass
             elif np.isin(tile[7,:,:], [352, 368, 392, 416, 432, 480, 840, 864, 880, 904, 928, 944, 1352]).any() == True:
@@ -218,32 +257,29 @@ def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_hei
                 # set medium developed to high dev
                 #tile[tile == 3] = 2
                 
-                # taking off the QA band and adjusting the rest
-                tile = adjust_band(tile[0:7])
-                # reshape from raster format to image format
-                reshaped_tile = reshape_as_image(tile)
+                # taking off the QA band
+                tile = tile[0:7]
+                # reshape from raster format to image format and standardize according to image wide stats
+                reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
                 
-                ### get sentinel 1 tile
-
-                # find gps of that pixel within the image
-                (x, y) = l8_image_datasets[dataset_index].xy(r, c)
-                
-                # convert the point we're sampling from to the same projection as the label dataset if necessary
-                if l8_proj != s1_proj:
-                    x,y = transform(l8_proj,s1_proj,x,y)
-
-                # reference gps in sentinel 1 to get matching pixel
-                row, col = s1_image_datasets[dataset_index].index(x,y)
-
-                # read in the s1 data 
-                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(col-buffer, row-buffer, tile_width, tile_height))
+                # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
+                # read in the sentinel-1 data 
+                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+               
+                # read in the DEM data 
+                dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
                 
                 if np.isnan(s1_tile).any() == True:
                     pass
+                elif np.isnan(dem_tile).any() == True:
+                    pass
                 else:
-                    reshaped_s1_tile = reshape_as_image(s1_tile)
-                    ### get label data
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_s1_tile = (reshape_as_image(s1_tile)  - 0.10) / 0.088
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
                     
+                    ### get label data
                     # find gps of that pixel within the image
                     (x, y) = l8_image_datasets[dataset_index].xy(r, c)
 
@@ -262,30 +298,19 @@ def tile_generator(l8_image_datasets, s1_image_datasets, label_dataset, tile_hei
                     else:                   
                         # add label to the batch in a one hot encoding style
                         label_batch[b][label] = 1
-                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile ) )
+                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) )
                         
                         b += 1
         yield (image_batch, label_batch)
 
     
-def pixel_generator(l8_image_datasets, s1_image_datasets, label_dataset, pixel_locations, batch_size):
+def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
     # pixel locations looks like [r, c, dataset_index]
     label_image = label_dataset.read()
-    label_image[label_image == 255] = 1
-    # merge some of the labels
-    # medium intensity and high intensity
-    label_image[label_image == 3] = 2
-    # open space developed and cultivated land
-    label_image[label_image == 5] = 6
-    # pasture/hay and grassland
-    label_image[label_image == 7] = 8
-    # deciduous forest and mixed forest
-    label_image[label_image == 9] = 11
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 16] = 13
+    label_image = merge_classes_lite(label_image)
 
     c = r = 0
     i = 0
@@ -297,7 +322,8 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, label_dataset, pixel_l
     # assuming all images have the same num of bands
     l8_band_count = l8_image_datasets[0].count  
     s1_band_count = s1_image_datasets[0].count
-    band_count = l8_band_count + s1_band_count
+    dem_band_count = dem_image_datasets[0].count
+    band_count = l8_band_count + s1_band_count + dem_band_count
     class_count = len(class_names)
   
     while True:
@@ -308,11 +334,13 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, label_dataset, pixel_l
             # if we're at the end  of the data just restart
             if i >= len(pixel_locations):
                 i=0
-            c, r = pixel_locations[i][0]
+            r, c = pixel_locations[i][0]
             dataset_index = pixel_locations[i][1]
             i += 1
             tile = l8_image_datasets[dataset_index].read(list(np.arange(1, l8_band_count+1)), window=Window(c, r, 1, 1))
-            if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
+            if tile.size == 0:
+                pass
+            elif np.amax(tile) == 0: # don't include if it is part of the image with no pixels
                 pass
             elif np.isnan(tile).any() == True or -9999 in tile: 
                 # we don't want tiles containing nan or -999 this comes from edges
@@ -330,29 +358,130 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, label_dataset, pixel_l
                 #tile[tile == 3] = 2
                 
                 # taking off the QA band and adjusting the rest
-                tile = adjust_band(tile[0:7])
+                tile = tile[0:7]
                 # reshape from raster format to image format
-                reshaped_tile = reshape_as_image(tile)
-                
-                ### get sentinel 1 tile
-
-                # find gps of that pixel within the image
-                (x, y) = l8_image_datasets[dataset_index].xy(r, c)
-                
-                # convert the point we're sampling from to the same projection as the label dataset if necessary
-                if l8_proj != s1_proj:
-                    x,y = transform(l8_proj,s1_proj,x,y)
-
-                # reference gps in sentinel 1 to get matching pixel
-                row, col = s1_image_datasets[dataset_index].index(x,y)
-
-                # read in the s1 data 
-                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(col, row, 1, 1))
+                reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
+                                
+                # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
+                # read in the sentinel-1 data 
+                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c,r,1,1))
+               
+                # read in the DEM data 
+                dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c,r,1,1))
                 
                 if np.isnan(s1_tile).any() == True:
                     pass
+                elif np.isnan(dem_tile).any() == True:
+                    pass
                 else:
-                    reshaped_s1_tile = reshape_as_image(s1_tile)
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_s1_tile = (reshape_as_image(s1_tile)  - 0.10) / 0.088
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
+                    
+                    # find gps of that pixel within the image
+                    (x, y) = l8_image_datasets[dataset_index].xy(r, c)
+
+                    # convert the point we're sampling from to the same projection as the label dataset if necessary
+                    if l8_proj != label_proj:
+                        x,y = transform(l8_proj,label_proj,x,y)
+
+                    # reference gps in label_image
+                    row, col = label_dataset.index(x,y)
+
+                    # find label
+                    label = label_image[:, row, col]
+                    # if this label is part of the unclassified area then ignore
+                    if label == 0 or np.isnan(label).any() == True:
+                        pass
+                    else:                   
+                        # add label to the batch in a one hot encoding style
+                        label_batch[b][label] = 1
+                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) )
+                        
+                        b += 1
+        return (image_batch, label_batch)
+        
+        
+def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
+    ### this is a keras compatible data generator which generates data and labels on the fly 
+    ### from a set of pixel locations, a list of image datasets, and a label dataset
+    
+    # pixel locations looks like [r, c, dataset_index]
+    label_image = label_dataset.read()
+    # merge some of the labels
+    label_image = merge_classes(label_image)
+
+    c = r = 0
+    i = 0
+    
+    label_proj = Proj(label_dataset.crs)
+    l8_proj = Proj(l8_image_datasets[0].crs)
+    s1_proj = Proj(s1_image_datasets[0].crs)
+
+    # assuming all images have the same num of bands
+    l8_band_count = l8_image_datasets[0].count  
+    s1_band_count = s1_image_datasets[0].count
+    dem_band_count = dem_image_datasets[0].count
+    band_count = l8_band_count + s1_band_count + dem_band_count
+    class_count = len(class_names)
+    buffer = math.ceil(tile_height / 2)
+  
+    while True:
+        image_batch = np.zeros((batch_size, tile_height * tile_width * (band_count-1)))
+        label_batch = np.zeros((batch_size,class_count))
+        b = 0
+        while b < batch_size:
+            # if we're at the end  of the data just restart
+            if i >= len(pixel_locations):
+                i=0
+            r,c = pixel_locations[i][0]
+            dataset_index = pixel_locations[i][1]
+            i += 1
+            tile = l8_image_datasets[dataset_index].read(list(np.arange(1, l8_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+            if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
+                pass
+            elif np.isnan(tile).any() == True or -9999 in tile: 
+                # we don't want tiles containing nan or -999 this comes from edges
+                # this also takes a while and is inefficient
+                pass
+            elif tile.shape != (l8_band_count, tile_width, tile_height):
+                #print('wrong shape')
+                #print(tile.shape)
+                # somehow we're randomly getting tiles without the correct dimensions
+                pass
+            elif np.isin(tile[7,:,:], [352, 368, 392, 416, 432, 480, 840, 864, 880, 904, 928, 944, 1352]).any() == True:
+                # make sure pixel doesn't contain clouds
+                # this is probably pretty inefficient but only checking width x height for each tile
+                # read more here: https://prd-wret.s3-us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/LSDS-1873_US_Landsat_ARD_DFCB_0.pdf
+                #print('Found some cloud.')
+                #print(tile[7,:,:])
+                pass
+            else:
+                # set medium developed to high dev
+                #tile[tile == 3] = 2
+                
+                # taking off the QA band and adjusting the rest
+                tile = tile[0:7]
+                # reshape from raster format to image format
+                reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
+                
+                # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
+                # read in the sentinel-1 data 
+                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+               
+                # read in the DEM data 
+                dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+                
+                if np.isnan(s1_tile).any() == True:
+                    pass
+                elif np.isnan(dem_tile).any() == True:
+                    pass
+                else:
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_s1_tile = (reshape_as_image(s1_tile)  - 0.10) / 0.088
+                    # reshape from raster format to image format and standardize according to image wide stats
+                    reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
                     ### get label data
                     
                     # find gps of that pixel within the image
@@ -373,81 +502,11 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, label_dataset, pixel_l
                     else:                   
                         # add label to the batch in a one hot encoding style
                         label_batch[b][label] = 1
-                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile ) )
+                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) ).flatten()
                         
                         b += 1
         return (image_batch, label_batch)
         
-def sk_tile_generator(image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
-    ### this is a keras compatible data generator which generates data and labels on the fly 
-    ### from a set of pixel locations, a list of image datasets, and a label dataset
-    
-    # pixel locations looks like [r, c, dataset_index]
-    label_image = label_dataset.read()
-    label_image[label_image == 255] = 1
-
-    c = r = 0
-    i = 0
-    
-    outProj = Proj(label_dataset.crs)
-
-    # assuming all images have the same num of bands
-    band_count = image_datasets[0].count
-    class_count = len(np.unique(label_image))
-    buffer = math.ceil(tile_height / 2)
-  
-    while True:
-        image_batch = np.zeros((batch_size, tile_height * tile_width * band_count))
-        label_batch = np.zeros((batch_size,class_count))
-        b = 0
-        while b < batch_size:
-            # if we're at the end  of the data just restart
-            if i >= len(pixel_locations):
-                i=0
-            c, r = pixel_locations[i][0]
-            dataset_index = pixel_locations[i][1]
-            i += 1
-            tile = image_datasets[dataset_index].read(list(np.arange(1, band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
-            if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
-                pass
-            elif np.isnan(tile).any() == True or -9999 in tile: 
-                # we don't want tiles containing nan or -999 this comes from edges
-                # this also takes a while and is inefficient
-                pass
-            elif tile.shape != (band_count, tile_width, tile_height):
-                print('wrong shape')
-                # somehow we're randomly getting tiles without the correct dimensions
-                # I assume it is when the tiles are on the edge
-                pass
-            else:
-                tile = adjust_band(tile)
-                # reshape from raster format to image format
-                reshaped_tile = reshape_as_image(tile)
-
-                # find gps of that pixel within the image
-                (x, y) = image_datasets[dataset_index].xy(r, c)
-
-                # convert the point we're sampling from to the same projection as the label dataset if necessary
-                inProj = Proj(image_datasets[dataset_index].crs)
-                if inProj != outProj:
-                    x,y = transform(inProj,outProj,x,y)
-
-                # reference gps in label_image
-                row, col = label_dataset.index(x,y)
-
-                # find label
-                label = label_image[:, row, col]
-                # if this label is part of the unclassified area then ignore
-                if label == 0 or np.isnan(label).any() == True:
-                    pass
-                else:
-                    # add label to the batch in a one hot encoding style
-                    label_batch[b][label] = 1
-                    image_batch[b] = reshaped_tile.flatten()
-                    b += 1
-        return (image_batch, label_batch)
-
-
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
