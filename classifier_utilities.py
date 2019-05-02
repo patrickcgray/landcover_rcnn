@@ -46,56 +46,40 @@ class_names = dict((
 (25, 'Snow/Ice')
 ))
 
-def merge_classes(label_image):
-    # merge some of the labels
-    label_image[label_image == 255] = 1
+def merge_classes(y):
     # medium intensity and high intensity
-    label_image[label_image == 3] = 2
-    # low intensity and high intensity
-    label_image[label_image == 4] = 2
-    
-    # open space developed and cultivated land
-    label_image[label_image == 5] = 6
-    # pasture/hay and grassland
-    label_image[label_image == 7] = 8
-    
-    # deciduous forest and mixed forest
-    label_image[label_image == 9] = 11
-    # deciduous forest and mixed forest
-    label_image[label_image == 10] = 11
-    # deciduous forest and mixed forest
-    label_image[label_image == 12] = 11
-    # deciduous forest and mixed forest
-    label_image[label_image == 13] = 11
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 16] = 11
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 17] = 11
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 14] = 11
-    
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 15] = 18
-    
-    # estuarine forest wetland to palustrine forested wetland
-    label_image[label_image == 22] = 23
- 
-    return(label_image)
+    y[y == 3] = 2
 
-def merge_classes_lite(label_image):
-    # merge some of the labels
-    label_image[label_image == 255] = 1
-    # medium intensity and high intensity
-    label_image[label_image == 3] = 2    
-    return(label_image)
+    # open space developed, cultivated land, and pasture hay
+    y[y == 5] = 6
+    y[y == 7] = 6
+
+    # decidious and mixed
+    y[y == 9] = 11
+
+    # evergreen and scrub shrub
+    y[y == 12] = 10
+
+    # pal wetland and pal scrub shrub
+    y[y == 14] = 15
+
+    # est forest and est scrub shrub
+    y[y == 17] = 16
+    
+    return(y)
 
 
-def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset):
+def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, merge=True):
     ### this function pulls out a train_count + val_count number of random pixels from a list of raster datasets
     ### and returns a list of training pixel locations and image indices 
     ### and a list of validation pixel locations and indices
     
     label_proj = Proj(label_dataset.crs)
+    num_classes = 0
+    if merge:
+        num_classes = len(np.unique(merge_classes(label_dataset.read())))
+    else: 
+        num_classes = len(np.unique(label_dataset.read()))
     
     train_pixels = []
     
@@ -103,7 +87,7 @@ def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset):
     for index, image_dataset in enumerate(tqdm(image_datasets)):
 
         # how many points from each class
-        points_per_class = train_count_per_dataset // len(class_names)
+        points_per_class = train_count_per_dataset // num_classes
         
         # get landsat boundaries in this image
         # create approx dataset mask in geographic coords
@@ -121,35 +105,40 @@ def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset):
 
         # mask the label dataset to landsat
         masked_label_image, masked_label_transform = rasterio.mask.mask(label_dataset, [raster_poly.__geo_interface__], crop=False)
-        masked_label_image = merge_classes_lite(masked_label_image)
+        if merge:
+            masked_label_image = merge_classes(masked_label_image)
 
         all_points_per_image = []
+        actual_class_values = np.unique(masked_label_image)
         # loop for each class
         for cls in range(len(class_names)):
-            # mask the label subset image to each class
-            class_mask_image = (masked_label_image==cls).astype(int)
-            
-            # pull out the indicies where the mask is true
-            rows,cols = np.where(class_mask_image[0] == 1)
-            all_locations = list(zip(rows,cols))
+            if cls not in actual_class_values:
+                pass
+            else:
+                # mask the label subset image to each class
+                class_mask_image = (masked_label_image==cls).astype(int)
 
-            # shuffle all locations
-            random.shuffle(all_locations)
-            
-            # now convert to landsat image crs
-            # TODO need to time this to see if it is slow, can probably optimize
-            l8_points = []
-            # TODO Will probably need to catch this for classes smaller than the ideal points per class
-            for r,c in all_locations[:points_per_class]:
-                # convert label row and col into label geographic space
-                x,y = label_dataset.xy(r,c)
-                # go from label projection into landsat projection
-                x,y = transform(label_proj, l8_proj,x,y)
-                # convert from landsat geographic space into row col
-                r,c = image_dataset.index(x,y)
-                l8_points.append((r,c))
-                                 
-            all_points_per_image += l8_points
+                # pull out the indicies where the mask is true
+                rows,cols = np.where(class_mask_image[0] == 1)
+                all_locations = list(zip(rows,cols))
+
+                # shuffle all locations
+                random.shuffle(all_locations)
+
+                # now convert to landsat image crs
+                # TODO need to time this to see if it is slow, can probably optimize
+                l8_points = []
+                # TODO Will probably need to catch this for classes smaller than the ideal points per class
+                for r,c in all_locations[:points_per_class]:
+                    # convert label row and col into label geographic space
+                    x,y = label_dataset.xy(r,c)
+                    # go from label projection into landsat projection
+                    x,y = transform(label_proj, l8_proj,x,y)
+                    # convert from landsat geographic space into row col
+                    r,c = image_dataset.index(x,y)
+                    l8_points.append((r,c))
+
+                all_points_per_image += l8_points
 
         dataset_index_list = [index] * len(all_points_per_image)
 
@@ -199,14 +188,15 @@ def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
         
     return (train_pixels, val_pixels)
     
-def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
+def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=True):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
     # pixel locations looks like [r, c, dataset_index]
     label_image = label_dataset.read()
     # merge some of the labels
-    label_image = merge_classes(label_image)
+    if merge:
+        label_image = merge_classes(label_image)
 
     c = r = 0
     i = 0
@@ -304,13 +294,15 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
         yield (image_batch, label_batch)
 
     
-def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size):
+def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size, merge=True):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
     # pixel locations looks like [r, c, dataset_index]
     label_image = label_dataset.read()
-    label_image = merge_classes_lite(label_image)
+    # merge some of the labels
+    if merge:
+        label_image = merge_classes(label_image)
 
     c = r = 0
     i = 0
@@ -359,7 +351,7 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
                 
                 # taking off the QA band and adjusting the rest
                 tile = tile[0:7]
-                # reshape from raster format to image format
+                # reshape from raster format to image format and standardize according to image wide stats
                 reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
                                 
                 # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
@@ -403,14 +395,15 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
         return (image_batch, label_batch)
         
         
-def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size):
+def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=True):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
     # pixel locations looks like [r, c, dataset_index]
     label_image = label_dataset.read()
     # merge some of the labels
-    label_image = merge_classes(label_image)
+    if merge:
+        label_image = merge_classes(label_image)
 
     c = r = 0
     i = 0
@@ -463,7 +456,7 @@ def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, 
                 
                 # taking off the QA band and adjusting the rest
                 tile = tile[0:7]
-                # reshape from raster format to image format
+                # reshape from raster format to image format and standardize according to image wide stats
                 reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
                 
                 # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
