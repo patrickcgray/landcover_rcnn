@@ -46,6 +46,32 @@ class_names = dict((
 (25, 'Snow/Ice')
 ))
 
+
+
+class_names = dict((
+(11, "Water"),
+(12, "Snow/Ice"),
+(21, "Open Space Developed"),
+(22, "Low Intensity Developed"),
+(23, "Medium Intensity Developed"),
+(24, "High Intensity Developed"),
+(31, "Barren Land"),
+(41, "Deciduous Forest"),
+(42, "Evergreen Forest"),
+(43, "Mixed Forest"),
+#(51, "Dwarf Scrub/Shrub - ALASKA"),
+(52, "Scrub/Shrub"),
+(71, "Grassland / Herbaceous"),
+#(72, "Sedge / Herbaceous - ALASKA"),
+#(73, "Lichen / Herbaceous - ALASKA"),
+#(74, "Moss - ALASKA"),
+(81, "Pasture/Hay"),
+(82, "Cultivated Land"),
+(90, "Woody Wetland"),
+(95, "Emergent Herbaceous Wetlands"),
+))
+
+
 def merge_classes(y):
     # medium intensity and high intensity
     y[y == 3] = 2
@@ -69,17 +95,13 @@ def merge_classes(y):
     return(y)
 
 
-def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, merge=True):
+def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, merge=False):
     ### this function pulls out a train_count + val_count number of random pixels from a list of raster datasets
     ### and returns a list of training pixel locations and image indices 
     ### and a list of validation pixel locations and indices
     
     label_proj = Proj(label_dataset.crs)
-    num_classes = 0
-    if merge:
-        num_classes = len(np.unique(merge_classes(label_dataset.read())))
-    else: 
-        num_classes = len(np.unique(label_dataset.read()))
+    num_classes = len(class_names)
     
     train_pixels = []
     
@@ -99,12 +121,16 @@ def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, mer
         # convert the raster bounds from landsat into label crs
         for x,y in raster_points:
             new_raster_points.append(transform(l8_proj,label_proj,x,y))
+            # convert from crs into row, col in label image coords
+            row, col = label_dataset.index(x, y)
+            # don't forget row, col is actually y, x so need to swap it when we append
+            new_raster_points.append((col, row))
             
         # turn this into a polygon
         raster_poly = Polygon(new_raster_points)
-
-        # mask the label dataset to landsat
-        masked_label_image, masked_label_transform = rasterio.mask.mask(label_dataset, [raster_poly.__geo_interface__], crop=False)
+        # Window.from_slices((row_start, row_stop), (col_start, col_stop))
+        masked_label_image = label_dataset.read(window=Window.from_slices((int(raster_poly.bounds[1]), int(raster_poly.bounds[3])), (int(raster_poly.bounds[0]), int(raster_poly.bounds[2]))))
+            
         if merge:
             masked_label_image = merge_classes(masked_label_image)
 
@@ -188,15 +214,9 @@ def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
         
     return (train_pixels, val_pixels)
     
-def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=True):
+def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
-    
-    # pixel locations looks like [r, c, dataset_index]
-    label_image = label_dataset.read()
-    # merge some of the labels
-    if merge:
-        label_image = merge_classes(label_image)
 
     c = r = 0
     i = 0
@@ -281,7 +301,10 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                     row, col = label_dataset.index(x,y)
 
                     # find label
-                    label = label_image[:, row, col]
+                    # image is huge so we need this to just get a single position
+                    window = ((row, row+1), (col, col+1))
+                    data = label_dataset.read(1, window=window, masked=False, boundless=True)
+                    label = data[0,0]
                     # if this label is part of the unclassified area then ignore
                     if label == 0 or np.isnan(label).any() == True:
                         pass
@@ -294,7 +317,7 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
         yield (image_batch, label_batch)
 
     
-def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size, merge=True):
+def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size, merge=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
@@ -395,7 +418,7 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
         return (image_batch, label_batch)
         
         
-def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=True):
+def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
