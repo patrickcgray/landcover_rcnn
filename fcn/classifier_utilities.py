@@ -637,7 +637,9 @@ def plot_confusion_matrix(y_true, y_pred, classes, class_dict,
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     # Only use the labels that appear in the data
-    classes = classes[unique_labels(y_true, y_pred)]
+    uq = unique_labels(y_true, y_pred)
+    print(uq)
+    classes = classes[uq]
     # convert class_id to class_name using the class_dict
     cover_names = []
     for cover_class in classes:
