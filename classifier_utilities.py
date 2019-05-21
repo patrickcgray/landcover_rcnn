@@ -40,31 +40,92 @@ class_names = dict((
 (95, "Emergent Herbaceous Wetlands"),
 ))
 
+class_to_index = dict((
+(11, 0),
+(12, 1),
+(21, 2),
+(22, 3),
+(23, 4),
+(24, 5),
+(31, 6),
+(41, 7),
+(42, 8),
+(43, 9),
+(52, 10),
+(71, 11),
+(81, 12),
+(82, 13),
+(90, 14),
+(95, 15),
+))
+
+
+indexed_dictionary = dict((
+(0, "Water"),
+(1, "Snow/Ice"),
+(2, "Open Space Developed"),
+(3, "Low Intensity Developed"),
+(4, "Medium Intensity Developed"),
+(5, "High Intensity Developed"),
+(6, "Barren Land"),
+(7, "Deciduous Forest"),
+(8, "Evergreen Forest"),
+(9, "Mixed Forest"),
+#(51, "Dwarf Scrub/Shrub - ALASKA"),
+(10, "Scrub/Shrub"),
+(11, "Grassland / Herbaceous"),
+#(72, "Sedge / Herbaceous - ALASKA"),
+#(73, "Lichen / Herbaceous - ALASKA"),
+#(74, "Moss - ALASKA"),
+(12, "Pasture/Hay"),
+(13, "Cultivated Land"),
+(14, "Woody Wetland"),
+(15, "Emergent Herbaceous Wetlands"),
+))
+
+
+      
+def pixel_balance(pixels, landsat_datasets, label_dataset,merge=True):
+    predictions = np.zeros(len(indexed_dictionary))
+    label_proj = Proj(label_dataset.crs)
+    l8_proj = Proj(landsat_datasets[0].crs)
+    for pixel in pixels:
+        r, c = pixel[0]
+        dataset_index = pixel[1]
+        (x, y) = landsat_datasets[dataset_index].xy(r, c)
+        # convert the point we're sampling from to the same projection as the label dataset if necessary
+        if l8_proj != label_proj:
+            x,y = transform(l8_proj,label_proj,x,y)
+        # reference gps in label_image
+        row, col = label_dataset.index(x,y)
+        # find label
+        # image is huge so we need this to just get a single position
+        window = ((row, row+1), (col, col+1))
+        data = label_dataset.read(1, window=window, masked=False, boundless=True)
+        if merge:
+            data = merge_classes(data)
+        label = data[0,0]
+        label = class_to_index[label]
+        predictions[label] +=1
+    return predictions
+
+def train_val_test_split(pixels, train_val_ratio, val_test_ratio):
+    random.shuffle(pixels)
+    train_px = pixels[:int(len(pixels)*train_val_ratio)]
+    val_pixels = pixels[int(len(pixels)*train_val_ratio):]
+    val_px = val_pixels[:int(len(val_pixels)*val_test_ratio)]
+    test_px = val_pixels[int(len(val_px)*val_test_ratio):]
+    return (train_px, val_px, test_px)
 
 def merge_classes(y):
     # medium intensity and high intensity
-    y[y == 3] = 2
-
-    # open space developed, cultivated land, and pasture hay
-    y[y == 5] = 6
-    y[y == 7] = 6
-
-    # decidious and mixed
-    y[y == 9] = 11
-
-    # evergreen and scrub shrub
-    y[y == 12] = 10
-
-    # pal wetland and pal scrub shrub
-    y[y == 14] = 15
-
-    # est forest and est scrub shrub
-    y[y == 17] = 16
-    
+    #y[y == 2] = 4
+    y[y == 22] = 23
+    y[y == 24] = 23
     return(y)
 
 
-def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, merge=False):
+def gen_balanced_pixel_locations(image_datasets, train_count, label_dataset, merge=True):
     ### this function pulls out a train_count + val_count number of random pixels from a list of raster datasets
     ### and returns a list of training pixel locations and image indices 
     ### and a list of validation pixel locations and indices
@@ -170,7 +231,11 @@ def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
         
     return (train_pixels, val_pixels)
     
-def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
+
+
+    
+    
+def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=True, reshape=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     class_to_index = dict((
@@ -278,6 +343,8 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                     # image is huge so we need this to just get a single position
                     window = ((row, row+1), (col, col+1))
                     data = label_dataset.read(1, window=window, masked=False, boundless=True)
+                    if merge:
+                        data = merge_classes(data)
                     label = data[0,0]
                     # if this label is part of the unclassified area then ignore
                     if label == 0 or np.isnan(label).any() == True:
@@ -286,7 +353,10 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                         # add label to the batch in a one hot encoding style
                         label = class_to_index[label]
                         label_batch[b][label] = 1
-                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) )
+                        if reshape:
+                            image_batch[b] = reshape_as_raster(np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile)))
+                        else:
+                            image_batch[b] = np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile))
                         b += 1
         yield (image_batch, label_batch)
 
