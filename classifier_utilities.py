@@ -258,8 +258,7 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
 ))
 
     c = r = 0
-    i = 0
-    
+    i = 0   
     label_proj = Proj(label_dataset.crs)
     l8_proj = Proj(l8_image_datasets[0].crs)
     s1_proj = Proj(s1_image_datasets[0].crs)
@@ -284,7 +283,9 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
             dataset_index = pixel_locations[i][1]
             i += 1
             tile = l8_image_datasets[dataset_index].read(list(np.arange(1, l8_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
-            if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
+            if tile.size == 0:
+                pass
+            elif np.amax(tile) == 0: # don't include if it is part of the image with no pixels
                 pass
             elif np.isnan(tile).any() == True or -9999 in tile: 
                 # we don't want tiles containing nan or -999 this comes from edges
