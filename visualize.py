@@ -93,7 +93,7 @@ class VisualizeData:
             ax_m.set_title(self.class_names[class_index])
             
             
-    
+    #takes landsat row_col
     def print_chosen_tile(self, landsat_index, tile_size, row_col, middle=False):
         buffer = math.ceil(tile_size / 2)
         r_landsat, c_landsat = row_col
