@@ -170,27 +170,28 @@ def gen_pixel_locations(image_datasets, train_count, val_count, tile_size):
         
     return (train_pixels, val_pixels)
     
-def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
+def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, ndvi_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
+    
     class_to_index = dict((
-(11, 0),
-(12, 1),
-(21, 2),
-(22, 3),
-(23, 4),
-(24, 5),
-(31, 6),
-(41, 7),
-(42, 8),
-(43, 9),
-(52, 10),
-(71, 11),
-(81, 12),
-(82, 13),
-(90, 14),
-(95, 15),
-))
+        (11, 0),
+        (12, 1),
+        (21, 2),
+        (22, 3),
+        (23, 4),
+        (24, 5),
+        (31, 6),
+        (41, 7),
+        (42, 8),
+        (43, 9),
+        (52, 10),
+        (71, 11),
+        (81, 12),
+        (82, 13),
+        (90, 14),
+        (95, 15),
+        ))
 
     c = r = 0
     i = 0
@@ -198,12 +199,14 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
     label_proj = Proj(label_dataset.crs)
     l8_proj = Proj(l8_image_datasets[0].crs)
     s1_proj = Proj(s1_image_datasets[0].crs)
+    ndvi_proj = Proj(ndvi_image_datasets[0].crs)
 
     # assuming all images have the same num of bands
     l8_band_count = l8_image_datasets[0].count  
     s1_band_count = s1_image_datasets[0].count
     dem_band_count = dem_image_datasets[0].count
-    band_count = l8_band_count + s1_band_count + dem_band_count
+    ndvi_band_count = ndvi_image_datasets[0].count
+    band_count = l8_band_count + s1_band_count + dem_band_count + ndvi_band_count
     class_count = len(class_names)
     buffer = math.ceil(tile_height / 2)
   
@@ -219,7 +222,9 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
             dataset_index = pixel_locations[i][1]
             i += 1
             tile = l8_image_datasets[dataset_index].read(list(np.arange(1, l8_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
-            if np.amax(tile) == 0: # don't include if it is part of the image with no pixels
+            if tile.size == 0:
+                pass
+            elif np.amax(tile) == 0: # don't include if it is part of the image with no pixels
                 pass
             elif np.isnan(tile).any() == True or -9999 in tile: 
                 # we don't want tiles containing nan or -999 this comes from edges
@@ -253,15 +258,24 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                 # read in the DEM data 
                 dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
                 
+                # read in the NDVI data 
+                ndvi_tile = ndvi_image_datasets[dataset_index].read(list(np.arange(1, ndvi_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+                
                 if np.isnan(s1_tile).any() == True:
                     pass
                 elif np.isnan(dem_tile).any() == True:
+                    pass
+                elif np.isnan(ndvi_tile).any() == True:
+                    pass
+                elif np.amax(ndvi_tile) == 0: # don't include if it is part of the image with no pixels
                     pass
                 else:
                     # reshape from raster format to image format and standardize according to image wide stats
                     reshaped_s1_tile = (reshape_as_image(s1_tile)  - 0.10) / 0.088
                     # reshape from raster format to image format and standardize according to image wide stats
                     reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
+                    # I don't think we need to normalize since it is already normalized to -1 to 1
+                    reshaped_ndvi_tile = reshape_as_image(ndvi_tile)
                     
                     ### get label data
                     # find gps of that pixel within the image
@@ -286,21 +300,35 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                         # add label to the batch in a one hot encoding style
                         label = class_to_index[label]
                         label_batch[b][label] = 1
-                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) )
+                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile, reshaped_ndvi_tile ) )
                         b += 1
         yield (image_batch, label_batch)
 
 
     
-def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, pixel_locations, batch_size, merge=False):
+    
+def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, ndvi_image_datasets, label_dataset, pixel_locations, batch_size, merge=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
     
-    # pixel locations looks like [r, c, dataset_index]
-    label_image = label_dataset.read()
-    # merge some of the labels
-    if merge:
-        label_image = merge_classes(label_image)
+    class_to_index = dict((
+        (11, 0),
+        (12, 1),
+        (21, 2),
+        (22, 3),
+        (23, 4),
+        (24, 5),
+        (31, 6),
+        (41, 7),
+        (42, 8),
+        (43, 9),
+        (52, 10),
+        (71, 11),
+        (81, 12),
+        (82, 13),
+        (90, 14),
+        (95, 15),
+        ))
 
     c = r = 0
     i = 0
@@ -308,12 +336,14 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
     label_proj = Proj(label_dataset.crs)
     l8_proj = Proj(l8_image_datasets[0].crs)
     s1_proj = Proj(s1_image_datasets[0].crs)
+    ndvi_proj = Proj(ndvi_image_datasets[0].crs)
 
     # assuming all images have the same num of bands
     l8_band_count = l8_image_datasets[0].count  
     s1_band_count = s1_image_datasets[0].count
     dem_band_count = dem_image_datasets[0].count
-    band_count = l8_band_count + s1_band_count + dem_band_count
+    ndvi_band_count = ndvi_image_datasets[0].count
+    band_count = l8_band_count + s1_band_count + dem_band_count + ndvi_band_count
     class_count = len(class_names)
   
     while True:
@@ -347,28 +377,38 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
                 # set medium developed to high dev
                 #tile[tile == 3] = 2
                 
-                # taking off the QA band and adjusting the rest
+                # taking off the QA band
                 tile = tile[0:7]
                 # reshape from raster format to image format and standardize according to image wide stats
                 reshaped_tile = (reshape_as_image(tile)  - 982.5) / 1076.5
-                                
+                
                 # L8, S1, and DEM are all the same projection and area otherwise this wouldn't work
                 # read in the sentinel-1 data 
-                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c,r,1,1))
+                s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c, r, 1, 1))
                
                 # read in the DEM data 
-                dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c,r,1,1))
+                dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c, r, 1, 1))
+                # read in the NDVI data 
+                ndvi_tile = ndvi_image_datasets[dataset_index].read(list(np.arange(1, ndvi_band_count+1)), window=Window(c, r, 1, 1))
+                
                 
                 if np.isnan(s1_tile).any() == True:
                     pass
                 elif np.isnan(dem_tile).any() == True:
+                    pass
+                elif np.isnan(ndvi_tile).any() == True:
+                    pass
+                elif np.amax(ndvi_tile) == 0: # don't include if it is part of the image with no pixels
                     pass
                 else:
                     # reshape from raster format to image format and standardize according to image wide stats
                     reshaped_s1_tile = (reshape_as_image(s1_tile)  - 0.10) / 0.088
                     # reshape from raster format to image format and standardize according to image wide stats
                     reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
+                    # I don't think we need to normalize since it is already normalized to -1 to 1
+                    reshaped_ndvi_tile = reshape_as_image(ndvi_tile)
                     
+                    ### get label data
                     # find gps of that pixel within the image
                     (x, y) = l8_image_datasets[dataset_index].xy(r, c)
 
@@ -380,17 +420,22 @@ def pixel_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, la
                     row, col = label_dataset.index(x,y)
 
                     # find label
-                    label = label_image[:, row, col]
+                    # image is huge so we need this to just get a single position
+                    window = ((row, row+1), (col, col+1))
+                    data = label_dataset.read(1, window=window, masked=False, boundless=True)
+                    label = data[0,0]
                     # if this label is part of the unclassified area then ignore
                     if label == 0 or np.isnan(label).any() == True:
                         pass
                     else:                   
                         # add label to the batch in a one hot encoding style
+                        label = class_to_index[label]
                         label_batch[b][label] = 1
-                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile ) )
-                        
+                        image_batch[b] = np.dstack( ( reshaped_tile, reshaped_s1_tile, reshaped_dem_tile, reshaped_ndvi_tile ) )
                         b += 1
         return (image_batch, label_batch)
+    
+  
         
         
 def sk_tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, label_dataset, tile_height, tile_width, pixel_locations, batch_size, merge=False):
