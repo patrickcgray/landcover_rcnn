@@ -33,6 +33,9 @@ class VisualizeData:
 (90, (0,255,255)), #woody wetland ~ aqua
 (95, (0,102,102)), #emergent herbaceous wetlands ~ darker aqua
 ))
+        
+        #(71, (255,153,71)), # grass land ~  orange
+
         self.class_names = dict((
 (11, "Water"),
 (12, "Snow/Ice"),
@@ -70,19 +73,20 @@ class VisualizeData:
         
     def print_a_tile(self, landsat_index, class_index, tile_size, middle=False):
         l8_proj = Proj(self.landsat[landsat_index].crs)
-        buffer = math.ceil(tile_size / 2)
+        buffer = math.floor(tile_size / 2)
         masked_label_image, raster_poly = self.__make_a_label_mask(landsat_index)
         rows,cols = np.where(masked_label_image[0] == class_index)
         all_locations = list(zip(rows,cols))
         if len(all_locations) == 0:
             return
-        loc_index = random.randint(0, len(all_locations)-1)
-        tile_loc = all_locations[loc_index]
-        #r, c is in label mask pixel locations
-        r_label, c_label = tile_loc
-        r_landsat, c_landsat = self.__transform_to_l8(landsat_index, r_label, c_label, raster_poly)
+        landsat_tile = np.zeros(1)
+        while np.isnan(landsat_tile).any() == True or -9999 in landsat_tile or np.amax(landsat_tile) == 0:
+            tile_loc = all_locations[random.randint(0, len(all_locations)-1)]
+            r_label, c_label = tile_loc
+            r_landsat, c_landsat = self.__transform_to_l8(landsat_index, r_label, c_label, raster_poly)
+            landsat_tile = self.__read_from_raster(self.landsat[landsat_index], c_landsat-buffer, r_landsat-buffer, tile_size) 
+        
         label_tile = self.__read_from_raster(self.labels, c_label+raster_poly.bounds[0]-buffer, r_label+raster_poly.bounds[1]-buffer, tile_size)
-        landsat_tile = self.__read_from_raster(self.landsat[landsat_index], c_landsat-buffer, r_landsat-buffer, tile_size)
         landsat_tile_normalized = self.__normalize_rgb(landsat_tile)
         ax_c = self.__plot_a_tile(landsat_tile_normalized)
         ax_c.set_title(self.class_names[class_index])
@@ -92,7 +96,11 @@ class VisualizeData:
             ax_m = self.__plot_a_tile(label_tile[0,:,:], colors = self.colors, middle = True)
             ax_m.set_title(self.class_names[class_index])
             
-            
+    
+    def __get_landsat_raster(self, r_label, c_label, landsat_index, raster_poly):
+
+        return landsat_tile
+        
     #takes landsat row_col
     def print_chosen_tile(self, landsat_index, tile_size, row_col, middle=False):
         buffer = math.ceil(tile_size / 2)
@@ -116,9 +124,11 @@ class VisualizeData:
         data = self.labels.read(1, window=window, masked=False, boundless=True)
         label = data[0,0]
         return label
+    
     def __read_from_raster(self, raster, column_start, row_start, tile_size):
         w = raster.read(window=Window(column_start, row_start, tile_size, tile_size))
         return w
+    
     def __plot_a_tile(self, tile, colors = None, middle = False):
         fig, ax = plt.subplots(figsize=(10, 10))
         self.open_figs.append(fig)
@@ -126,21 +136,19 @@ class VisualizeData:
              ax.imshow(tile)
         else:
             colored_label_img = np.zeros((tile.shape[0], tile.shape[1], 3))
-            center_px = math.ceil(tile.shape[0]/2)
+            center_px = math.floor(tile.shape[0]/2)
             for h in range(tile.shape[0]):
                 for w in range(tile.shape[1]):
                     if h == center_px and w == center_px and middle:
                         colored_label_img[h][w] = (0,0,0)
-                    if tile[h][w] not in self.class_names:
+                    elif tile[h][w] not in self.class_names:
                          colored_label_img[h][w] = (0,0,0)
                     else:
                         colored_label_img[h][w] = np.divide(colors[tile[h][w]], 255)
             print("sanity check print middle pixel {}".format(tile[center_px][center_px]))
             ax.imshow(colored_label_img)
         return ax
-    
-    
-    
+  
     def close_figs(self):
         for fig in self.open_figs:
             plt.close(fig)
@@ -189,8 +197,16 @@ class VisualizeData:
         # Window.from_slices((row_start, row_stop), (col_start, col_stop))
         masked_label_image = self.labels.read(window=Window.from_slices((int(raster_poly.bounds[1]), int(raster_poly.bounds[3])), (int(raster_poly.bounds[0]), int(raster_poly.bounds[2]))))
         return masked_label_image, raster_poly
-        
-        
+      
+    def count_labels(self,landsat_index):
+        buckets = dict()
+        label_mask, raster_poly = self.__make_a_label_mask(landsat_index)
+        for cls in self.class_names:
+            rows,cols = np.where(label_mask[0] == cls)
+            all_locations = list(zip(rows,cols))
+            buckets[cls] = len(all_locations)
+        return buckets
+            
         
         
         
