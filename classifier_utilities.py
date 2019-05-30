@@ -12,7 +12,6 @@ from rasterio.windows import Window
 import rasterio.features
 import rasterio.warp
 import rasterio.mask
-import new_classifier_utilities as nw
 
 from pyproj import Proj, transform
 from tqdm import tqdm
@@ -217,9 +216,8 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
     l8_band_count = l8_image_datasets[0].count  
     s1_band_count = s1_image_datasets[0].count
     dem_band_count = dem_image_datasets[0].count
-    band_count = l8_band_count + s1_band_count + dem_band_count
+    band_count = l8_band_count# + s1_band_count + dem_band_count
     class_count = len(class_names)
-    print(class_count)
     buffer = math.floor(tile_height / 2)
   
     while True:
@@ -241,9 +239,11 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
             s1_tile = s1_image_datasets[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
                 # read in the DEM data 
             dem_tile = dem_image_datasets[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
-            if np.isnan(s1_tile).any() == True:
+            if np.isnan(s1_tile).any():
+                print("u need to check before")
                 pass
-            elif np.isnan(dem_tile).any() == True:
+            elif np.isnan(dem_tile).any():
+                print("u need to check before")
                 pass
             else:
                 tile = tile[0:7]
@@ -266,13 +266,19 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, lab
                 if merge:
                     data = merge_classes(data)
                 label = data[0,0]
-                if label == 0 or np.isnan(label).any() == True: #or label not in class_to_index:
-                    #print(label)
+                if np.isnan(reshaped_s1_tile).any() or np.isinf(reshaped_s1_tile).any():
+                    print("s1 reshaped")
+                    pass
+                elif np.isnan(reshaped_dem_tile).any() or np.isinf(reshaped_dem_tile).any():
+                    print("dem reshaped")
+                    pass             
+                elif label == 0 or np.isnan(label).any() or label not in class_to_index:
+                    print("label:{}".format(label))
                     pass
                 else:                   
                     label = class_to_index[label]
                     label_batch[b][label] = 1
-                    image_batch[b] = np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile))    
+                    image_batch[b] = reshaped_tile #np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile))    
                     b += 1
         yield (image_batch, label_batch) 
 
@@ -319,7 +325,7 @@ def load_data():
         
         
         
-def delete_black_tiles(landsat, tile_size, pixels, max_size = None):
+def delete_black_tiles(landsat, s1, dem tile_size, pixels, max_size = None):
     buffer = math.floor(tile_size / 2)
     l8_band_count = landsat[0].count  
     new_pixels = []
@@ -327,7 +333,13 @@ def delete_black_tiles(landsat, tile_size, pixels, max_size = None):
         r, c = pixel[0]
         dataset_index = pixel[1]
         tile = landsat[dataset_index].read(list(np.arange(1, l8_band_count+1)),window=Window(c-buffer, r-buffer, tile_size, tile_size))
+        s1_tile = s1[dataset_index].read(list(np.arange(1, s1_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
+        dem_tile = dem[dataset_index].read(list(np.arange(1, dem_band_count+1)), window=Window(c-buffer, r-buffer, tile_width, tile_height))
         if np.isnan(tile).any() == True or -9999 in tile or tile.size == 0 or np.amax(tile) == 0 or np.isin(tile[7,:,:], [352, 368, 392, 416, 432, 480, 840, 864, 880, 904, 928, 944, 1352]).any() == True or tile.shape != (l8_band_count, tile_size, tile_size):
+            pass
+        elif np.isnan(s1_tile).any():
+            pass
+        elif np.isnan(dem_tile).any():
             pass
         else:
             new_pixels.append(pixel)
