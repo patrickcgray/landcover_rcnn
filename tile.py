@@ -6,13 +6,10 @@ import math
 import itertools
 from rasterio.plot import show
 from rasterio.windows import Window
-import rasterio.features
-import rasterio.warp
-import rasterio.mask
 from pyproj import Proj, transform
 from tqdm import tqdm
 from shapely.geometry import Polygon
-
+from rasterio.plot import reshape_as_raster, reshape_as_image
 
 class tile_gen():
     def __init__(self, landsat, sentinel, dem, label, tile_size, class_count):
@@ -27,13 +24,17 @@ class tile_gen():
         l8_band_count = self.landsat[0].count  
         s1_band_count = self.s1[0].count
         dem_band_count = self.dem[0].count
-        total = l8_band_count + s1_band_count + dem_band_count - 1
+        total = l8_band_count + s1_band_count + dem_band_count
         if return_total:
             return total
         return (l8_band_count, s1_band_count, dem_band_count, total)
    
-    def get_input_shape(self):
-        return (self.tile_length, self.tile_length, self.__get_band_counts(return_total=True))
+    def get_tile_shape(self, reshape=False):
+        if reshape:
+            tile_shape = (self.__get_band_counts(return_total=True), self.tile_length, self.tile_length)
+        else:
+            tile_shape = (self.tile_length, self.tile_length, self.__get_band_counts(return_total=True))
+        return tile_shape
         
     def tile_generator(self, pixel_locations, batch_size, merge=True):
     ### this is a keras compatible data generator which generates data and labels on the fly 
@@ -42,12 +43,11 @@ class tile_gen():
         i = 0
         bad_count = 0
         label_proj = Proj(self.label.crs)
-        l8_proj = Proj(self.landast[0].crs)
-        s1_proj = Proj(self.s1[0].crs)
+        l8_proj = Proj(self.landsat[0].crs)
         # assuming all images have the same num of bands
         band_count  = self.__get_band_counts(return_total=True)
         class_count = self.class_count
-        buffer = math.floor(tile_height / 2)
+        buffer = math.floor(tile_size / 2)
         while True:
             image_batch = np.zeros((batch_size, tile_size, tile_size, band_count-1)) # take one off because we don't want the QA band
             label_batch = np.zeros((batch_size,class_count))
@@ -70,16 +70,16 @@ class tile_gen():
                 reshaped_dem_tile = (reshape_as_image(dem_tile)  - 31) / 16.5
                 ### get label data
                 # find gps of that pixel within the image
-                (x, y) = l8_image_datasets[dataset_index].xy(r, c)
+                (x, y) = self.landsat[dataset_index].xy(r, c)
                 # convert the point we're sampling from to the same projection as the label dataset if necessary
                 if l8_proj != label_proj:
                     x,y = transform(l8_proj,label_proj,x,y)
                     # reference gps in label_image
-                row, col = label_dataset.index(x,y)
+                row, col = self.label.index(x,y)
                 window = ((row, row+1), (col, col+1))
-                data = label_dataset.read(1, window=window, masked=False, boundless=True)
+                data = self.label.read(1, window=window, masked=False, boundless=True)
                 if merge:
-                    data = merge_classes(data)
+                    data = util.merge_classes(data)
                 label = data[0,0]
                 if np.isnan(reshaped_s1_tile).any() or np.isinf(reshaped_s1_tile).any():
                     bad_count+=1
@@ -89,7 +89,7 @@ class tile_gen():
                     bad_count+=1
                     print(bad_count)
                     pass             
-                elif label == 0 or np.isnan(label).any() or label not in class_to_index:
+                elif label == 0 or np.isnan(label).any() or label not in util.class_to_index:
                     bad_count+=1
                     print(bad_count)
                     pass
