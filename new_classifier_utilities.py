@@ -40,6 +40,35 @@ class_names = dict((
 (95, "Emergent Herbaceous Wetlands"),
 ))
 
+# class_names = dict((
+# (0,  'Background'),
+# (1, 'Unclassified'),
+# (2, 'High Intensity Developed'),
+# (3, 'Medium Intensity Developed'),
+# (4, 'Low Intensity Developed'),
+# (5, 'Open Space Developed'),
+# (6, 'Cultivated Land'),
+# (7, 'Pasture/Hay'),
+# (8, 'Grassland'),
+# (9, 'Deciduous Forest'),
+# (10, 'Evergreen Forest'),
+# (11, 'Mixed Forest'),
+# (12, 'Scrub/Shrub'),
+# (13, 'Palustrine Forested Wetland'),
+# (14, 'Palustrine Scrub/Shrub Wetland'),
+# (15, 'Palustrine Emergent Wetland'),
+# (16, 'Estuarine Forested Wetland'),
+# (17, 'Estuarine Scrub/Shrub Wetland'),
+# (18, 'Estuarine Emergent Wetland'),
+# (19, 'Unconsolidated Shore'),
+# (20, 'Bare Land'),
+# (21, 'Water'),
+# (22, 'Palustrine Aquatic Bed'),
+# (23, 'Estuarine Aquatic Bed'),
+# (24, 'Tundra'),
+# (25, 'Snow/Ice')
+# ))
+
 
 def merge_classes(y):
     # medium intensity and high intensity
@@ -192,6 +221,36 @@ def tile_generator(l8_image_datasets, s1_image_datasets, dem_image_datasets, ndv
         (90, 14),
         (95, 15),
         ))
+
+#     class_to_index = dict((
+#         (0, 0),
+#         (1, 1),
+#         (2, 2),
+#         (3, 3),
+#         (4, 4),
+#         (5, 5),
+#         (6, 6),
+#         (7, 7),
+#         (8, 8),
+#         (9, 9),
+#         (10, 10),
+#         (11, 11),
+#         (12, 12),
+#         (13, 13),
+#         (14, 14),
+#         (15, 15),
+#         (16, 16),
+#         (17,17),
+#         (18,18),
+#         (19, 19),
+#         (20, 20),
+#         (21, 21),
+#         (22,22),
+#         (23, 23),
+#         (24, 24),
+#         (25, 25)
+#         ))
+     
 
     c = r = 0
     i = 0
