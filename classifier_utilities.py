@@ -105,8 +105,9 @@ def pixel_balance(pixels, landsat_datasets, label_dataset,merge=True):
         if merge:
             data = merge_classes(data)
         label = data[0,0]
-        label = class_to_index[label]
-        predictions[label] +=1
+        if label != 0 or label != np.nan:
+            label = class_to_index[label]
+            predictions[label] +=1
     return predictions
 
 def train_val_test_split(pixels, train_val_ratio, val_test_ratio):

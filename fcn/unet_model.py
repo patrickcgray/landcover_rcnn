@@ -2,13 +2,12 @@
 
 from keras.models import Model
 from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Conv2DTranspose, BatchNormalization, Dropout
-from keras.optimizers import SGD
+from keras.optimizers import Adam
 from keras.utils import plot_model
 from keras import backend as K
 
 
-def unet_model(n_classes=5, im_sz=160, n_channels=8, n_filters_start=32, growth_factor=2, upconv=True,
-               metrics=['accuracy']):
+def unet_model(class_weights, n_classes=5, im_sz=160, n_channels=8, n_filters_start=32, growth_factor=2, upconv=True):
     droprate=0.25
     n_filters = n_filters_start
     inputs = Input((im_sz, im_sz, n_channels))
@@ -101,6 +100,9 @@ def unet_model(n_classes=5, im_sz=160, n_channels=8, n_filters_start=32, growth_
     conv10 = Conv2D(n_classes, (1, 1), activation='sigmoid')(conv9)
     model = Model(inputs=inputs, outputs=conv10)
     
-    sgd = SGD(lr=0.001, decay=1e-6, momentum=0.9, nesterov=True)
-    model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=metrics)
+    def weighted_binary_crossentropy(y_true, y_pred):
+        class_loglosses = K.mean(K.binary_crossentropy(y_true, y_pred), axis=[0,1,2])
+        return K.sum(class_loglosses * K.constant(class_weights))
+    
+    model.compile(optimizer=Adam(), metrics = ['accuracy'], loss=weighted_binary_crossentropy)
     return model

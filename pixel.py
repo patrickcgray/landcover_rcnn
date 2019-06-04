@@ -43,6 +43,44 @@ class pixel_gen():
         for i in range(len(util.indexed_dictionary)):
             print("{}:{}".format(util.indexed_dictionary[i], self.balance[i]))
     
+    
+    def calculate_balance(self, pixels, merge=True):
+        self.balance = np.zeros(len(util.indexed_dictionary))
+        label_proj = Proj(self.label.crs)
+        l8_proj = Proj(self.landsat[0].crs)
+        for pixel in pixels:
+            r, c = pixel[0]
+            dataset_index = pixel[1]
+            (x, y) = self.landsat[dataset_index].xy(r, c)
+            # convert the point we're sampling from to the same projection as the label dataset if necessary
+            if l8_proj != label_proj:
+                x,y = transform(l8_proj,label_proj,x,y)
+            # reference gps in label_image
+            row, col = self.label.index(x,y)
+            # find label
+            # image is huge so we need this to just get a single position
+            data = self.label.read(1, window=((row, row+1), (col, col+1)), masked=False, boundless=True)
+            if merge:
+                data = util.merge_classes(data)
+            label = data[0,0]
+            if label != 0 and label != np.nan:
+                label = util.class_to_index[label]
+                self.balance[label] +=1
+        return self.balance
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     def __gen_balanced_pixel_locations(self, l8_data, s1_data, dem_data, label_dataset, pixel_count, tile_size, num_classes, merge=True):
         label_proj = Proj(label_dataset.crs)
         pixels = []
@@ -78,10 +116,10 @@ class pixel_gen():
     def __gen_pixel_locations(self, l8_data, s1_data, dem_data, pixel_count, tile_size):
         pixels = []
         buffer = math.floor(tile_size/2)
-        count_per_dataset = math.ceil(pixel_count / len(l8_datasets))
-        for index, l8_data in l8_datasets:
+        count_per_dataset = math.ceil(pixel_count / len(l8_data))
+        for index, l8_d in l8_data.items():
             #randomly pick `count` num of pixels from each dataset
-            img_height, img_width = l8_data.shape
+            img_height, img_width = l8_d.shape
             rows = range(0+buffer, img_height-buffer)
             columns = range(0+buffer, img_width-buffer)
             points = random.sample(set(itertools.product(rows, columns)), math.ceil(10*count_per_dataset))
