@@ -58,7 +58,8 @@ def load_data():
     '/deep_data/processed_landsat/LC08_CU_028011_20170907_20181130_C01_V01_SR_combined.tif',  
     '/deep_data/processed_landsat/LC08_CU_028012_20171002_20171019_C01_V01_SR_combined.tif',
     '/deep_data/processed_landsat/LC08_CU_028012_20171103_20190429_C01_V01_SR_combined.tif',
-    '/deep_data/processed_landsat/LC08_CU_029011_20171018_20190429_C01_V01_SR_combined.tif'
+    '/deep_data/processed_landsat/LC08_CU_029011_20171018_20190429_C01_V01_SR_combined.tif',
+    '/deep_data/processed_landsat/LC08_CU_028010_20170714_20190429_C01_V01_SR_combined.tif'
     ]
 
     s1_image_paths = [
@@ -67,6 +68,7 @@ def load_data():
     '/deep_data/sentinel_sar/LC08_CU_028012_20171002_20171019_C01_V01_SR_combined/aligned-LC08_CU_028012_20171002_20171019_C01_V01_SR_combined_SAR.tif',
     '/deep_data/sentinel_sar/LC08_CU_028012_20171103_20190429_C01_V01_SR_combined/aligned-LC08_CU_028012_20171103_20190429_C01_V01_SR_combined_SAR.tif',
     '/deep_data/sentinel_sar/LC08_CU_029011_20171018_20190429_C01_V01_SR_combined/aligned-LC08_CU_029011_20171018_20190429_C01_V01_SR_combined_SAR.tif',
+    '/deep_data/sentinel_sar/LC08_CU_028010_20170714_20190429_C01_V01_SR_combined/aligned-LC08_CU_028010_20170714_20190429_C01_V01_SR_combined_SAR.tif'
    ]
 
     dem_image_paths = [
@@ -75,6 +77,7 @@ def load_data():
     '/deep_data/sentinel_sar/LC08_CU_028012_20171002_20171019_C01_V01_SR_combined_dem/aligned-wms_DEM_EPSG4326_-79.69001_33.95762_-77.7672_35.51886__4500X4631_ShowLogo_False_tiff_depth=32f.tiff',
     '/deep_data/sentinel_sar/LC08_CU_028012_20171103_20190429_C01_V01_SR_combined_dem/aligned-wms_DEM_EPSG4326_-78.07896_33.69485_-76.14021_35.27466__4500X4248_ShowLogo_False_tiff_depth=32f.tiff',
     '/deep_data/sentinel_sar/LC08_CU_029011_20171018_20190429_C01_V01_SR_combined_dem/aligned-wms_DEM_EPSG4326_-76.14021_34.71847_-74.14865_36.318__4500X4408_ShowLogo_False_tiff_depth=32f.tiff',
+    '/deep_data/sentinel_sar/LC08_CU_028010_20170714_20190429_C01_V01_SR_combined_dem/aligned-wms_DEM_EPSG4326_-77.44453_36.318_-75.42829_37.90193__4500X4283_ShowLogo_False_tiff_depth=32f.tiff'
     ]
 
     landsat_datasets = []

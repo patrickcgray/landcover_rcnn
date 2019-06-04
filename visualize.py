@@ -11,9 +11,9 @@ import utilities as util
 
 class VisualizeData:
     
-    def __init__(self, landsat_datasets, label_dataset):
+    def __init__(self):
         self.landsat, self.s1, self.dem, self.label = util.load_data()
-        self.label_proj = Proj(label_dataset.crs)
+        self.label_proj = Proj(self.label.crs)
         self.open_figs = list()
         self.colors = util.colors
         self.class_names = util.class_names
@@ -33,7 +33,7 @@ class VisualizeData:
     def print_a_tile(self, landsat_index, class_index, tile_size, middle=False):
         l8_proj = Proj(self.landsat[landsat_index].crs)
         buffer = math.floor(tile_size / 2)
-        masked_label_image, raster_poly = util.make_a_label_mask(self.landsat[landsat_index], self.label_proj)
+        masked_label_image, raster_poly = util.make_label_mask(self.landsat[landsat_index], self.label)
         rows,cols = np.where(masked_label_image[0] == class_index)
         all_locations = list(zip(rows,cols))
         if len(all_locations) == 0:
