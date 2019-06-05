@@ -12,8 +12,8 @@ import utilities as util
 class VisualizeData:
     
     def __init__(self):
-        self.landsat, self.s1, self.dem, self.label = util.load_data()
-        self.label_proj = Proj(self.label.crs)
+        self.landsat, self.s1, self.dem, self.labels = util.load_data()
+        self.label_proj = Proj(self.labels.crs)
         self.open_figs = list()
         self.colors = util.colors
         self.class_names = util.class_names
@@ -27,13 +27,13 @@ class VisualizeData:
         ax.set_title("RGB in matplotlib imshow")
     
     def view_labels(self, landsat_index):
-        masked_label_image, raster_poly = util.make_a_label_mask(self.landsat[landsat_index], self.label_proj)
+        masked_label_image, raster_poly = util.make_label_mask(self.landsat[landsat_index], self.labels)
         ax = self.__plot_a_tile(masked_label_image[0,:,:], colors=self.colors)
         
     def print_a_tile(self, landsat_index, class_index, tile_size, middle=False):
         l8_proj = Proj(self.landsat[landsat_index].crs)
         buffer = math.floor(tile_size / 2)
-        masked_label_image, raster_poly = util.make_label_mask(self.landsat[landsat_index], self.label)
+        masked_label_image, raster_poly = util.make_label_mask(self.landsat[landsat_index], self.labels)
         rows,cols = np.where(masked_label_image[0] == class_index)
         all_locations = list(zip(rows,cols))
         if len(all_locations) == 0:

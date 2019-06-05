@@ -21,8 +21,8 @@ class pixel_gen():
         self.class_count = class_count
 
     
-    def gen_pixels(self, pixel_count, balanced = True, merge = True, index = None):
-        l8_data, s1_data, dem_data = self.__get_tiles_to_use(index)
+    def gen_pixels(self, pixel_count, balanced = True, merge = True, index = None, not_include = None):
+        l8_data, s1_data, dem_data = self.__get_tiles_to_use(index, not_include)
         if balanced:
             pixels = self.__gen_balanced_pixel_locations(l8_data, s1_data, dem_data, self.label, pixel_count, self.tile_length, self.class_count, merge=merge)
         else:
@@ -67,20 +67,7 @@ class pixel_gen():
                 label = util.class_to_index[label]
                 self.balance[label] +=1
         return self.balance
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     def __gen_balanced_pixel_locations(self, l8_data, s1_data, dem_data, label_dataset, pixel_count, tile_size, num_classes, merge=True):
         label_proj = Proj(label_dataset.crs)
         pixels = []
@@ -148,11 +135,16 @@ class pixel_gen():
                     return new_pixels
         return new_pixels    
         
-    def __get_tiles_to_use(self, index):
-        if index == None:
-            l8_data, s1_data, dem_data = (self.landsat, self.s1, self.dem)
-        else:
+    def __get_tiles_to_use(self, index, not_include):
+        if index != None:
             l8_data, s1_data, dem_data = (dict({index: self.landsat[index]}), dict({index: self.s1[index]}), dict({index: self.dem[index]}))
+        elif not_include != None:
+            l8_data, s1_data, dem_data = (self.landsat.copy(), self.s1.copy(), self.dem.copy())
+            l8_data.pop(not_include, None)
+            s1_data.pop(not_include, None)
+            dem_data.pop(not_include, None)
+        else:
+            l8_data, s1_data, dem_data = (self.landsat, self.s1, self.dem)
         return (l8_data, s1_data, dem_data)
             
         
