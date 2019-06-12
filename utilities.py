@@ -15,6 +15,21 @@ from sklearn.metrics import confusion_matrix
 from sklearn.utils.multiclass import unique_labels
 
 
+def read_txt(filenames):
+    pixels = list()
+    for file in filenames:
+        opened_file = open(file, "r")
+        list_px = opened_file.readlines()
+        px = list()
+        for line in list_px:
+            split = line.split()
+            index = split[1][-1]
+            row = split[0][1:-1]
+            col = split[1][:-2]
+            px.append(((int(row), int(col)),int(index)))
+        pixels.append(px)
+    return pixels
+
 def read_windows(rasters, c, r, buffer, tile_size):
     tiles = []
     #only works when rasters are in same projection

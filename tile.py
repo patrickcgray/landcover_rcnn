@@ -29,14 +29,16 @@ class tile_gen():
             return total
         return (l8_band_count, s1_band_count, dem_band_count, total)
    
-    def get_tile_shape(self, reshape=False):
-        if reshape:
+    def get_tile_shape(self, reshape=False, flat=False):
+        if flat:
+            tile_shape = (self.__get_band_counts(return_total=True))
+        elif reshape:
             tile_shape = (self.__get_band_counts(return_total=True), self.tile_length, self.tile_length)
         else:
             tile_shape = (self.tile_length, self.tile_length, self.__get_band_counts(return_total=True))
         return tile_shape
         
-    def tile_generator(self, pixel_locations, batch_size, fcn = False, merge=True):
+    def tile_generator(self, pixel_locations, batch_size, fcn = False, merge=True, flat=False):
     ### this is a keras compatible data generator which generates data and labels on the fly 
     ### from a set of pixel locations, a list of image datasets, and a label dataset
         tile_size = self.tile_length
@@ -48,7 +50,10 @@ class tile_gen():
         class_count = self.class_count
         buffer = math.floor(tile_size / 2)
         while True:
-            image_batch = np.zeros((batch_size, tile_size, tile_size, band_count))
+            if flat:
+                image_batch = np.zeros((batch_size, band_count))
+            else:
+                image_batch = np.zeros((batch_size, tile_size, tile_size, band_count))
             if fcn:
                 label_batch = np.zeros((batch_size,tile_size, tile_size, class_count))
             else:
@@ -92,7 +97,10 @@ class tile_gen():
                         label_batch[b][label] = 1
                         flag = False
                 if not flag:
-                    image_batch[b] = np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile))    
+                    total_tile = np.dstack((reshaped_tile, reshaped_s1_tile, reshaped_dem_tile))
+                    if flat:
+                        total_tile = total_tile.flatten()
+                    image_batch[b] = total_tile
                     b += 1
             yield (image_batch, label_batch)   
             
