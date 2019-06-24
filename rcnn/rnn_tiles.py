@@ -11,6 +11,9 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 import utilities as util
+import importlib
+
+importlib.reload(util)
     
     
 class rnn_tile_gen():   
@@ -27,6 +30,7 @@ class rnn_tile_gen():
     def tile_generator(self, pixel_locations, batch_size):
         ### this is a keras compatible data generator which generates data and labels on the fly 
         ### from a set of pixel locations, a list of image datasets, and a label dataset
+        bad_tiles = 0
         tile_size = self.tile_length
         i = 0
         lc_proj = Proj(self.lc_label.crs)
@@ -39,7 +43,7 @@ class rnn_tile_gen():
         buffer = math.floor(tile_size / 2)
         while True:
             image_batch = np.zeros((batch_size, time_steps, tile_size, tile_size, band_count))
-            lc_batch = np.zeros((batch_size, tile_size, tile_size, class_count))
+            lc_batch = np.zeros((batch_size, tile_size*tile_size, class_count))
             canopy_batch = np.zeros((batch_size, tile_size, tile_size))
             b = 0
             while b < batch_size:
@@ -47,14 +51,22 @@ class rnn_tile_gen():
                 if i >= len(pixel_locations):
                     i=0
                 r, c = pixel_locations[i][0]
+                print("{},{}".format(r,c))
                 tile_num = pixel_locations[i][1]
                 i += 1
                 tiles_to_read = self.l8_dict[tile_num]
                 tiles_read = util.read_windows(tiles_to_read, c ,r, buffer, tile_size)
                 reshaped_tiles = []
+                
+                band_avg = [  345.72448081,   352.93755735,   319.34257128,   899.39728239,
+         649.46125258,   370.53562465, -1084.8218946 ]
+                band_std = [ 661.75737932,  363.32761072,  425.28671553,  959.63442896,
+        838.86193201,  501.96992987, 3562.42995552]
                 for tile in tiles_read:
                     tile = tile[0:7]
-                    reshaped_tile = (reshape_as_image(tile))  #- 982.5) / 1076.5
+                    reshaped_tile = reshape_as_image(tile).astype(np.float64)
+                   # for jj in range(7):
+                    #    reshaped_tile[:][:][jj] = np.divide(np.subtract(reshaped_tile[:][:][jj],band_avg[jj]),band_std[jj])
                     reshaped_tiles.append(reshaped_tile)
                 ### get label data
                 # find gps of that pixel within the image
@@ -69,22 +81,24 @@ class rnn_tile_gen():
                 lc_data = self.lc_label.read(1, window=Window(lc_col-buffer, lc_row-buffer, tile_size, tile_size))
                 canopy_row, canopy_col = self.canopy_label.index(canopy_x,canopy_y)
                 canopy_data = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
-                
-                if 0 not in lc_data and np.nan not in lc_data and np.nan not in canopy_data and 255 not in canopy_data and canopy_data.shape == (32, 32):
-                    print(canopy_data)
+                if 0 not in lc_data and np.nan not in lc_data and np.nan not in canopy_data and 255 not in canopy_data and canopy_data.shape == (self.tile_length, self.tile_length):
                     lc_label = self.one_hot_encode(lc_data, tile_size, class_count)
-                    lc_batch[b] = lc_label
-                    canopy_batch[b] = canopy_data
-                    total_tile = np.array((*reshaped_tiles,))
-                    image_batch[b] = total_tile
-                    b += 1
-            yield (image_batch, {'landcover': lc_batch, 'canopy': canopy_batch})   
+                    if len(np.unique(lc_label)) != 1:
+                        lc_batch[b] = lc_label.reshape(tile_size*tile_size, class_count)
+                        #canopy_batch[b] = canopy_data/100
+                        total_tile = np.array((*reshaped_tiles,))
+                        image_batch[b] = total_tile
+                        b += 1
+            yield (image_batch, lc_batch)#{'landcover': lc_batch, 'canopy': canopy_batch})   
             
     def one_hot_encode(self, data, tile_size, class_count):
         label = np.zeros((tile_size, tile_size, class_count))
+        flag = True
+        count = 0 
         for i in range(tile_size):
             for j in range(tile_size):
                 label_index = util.class_to_index[data[i][j]]
+                #print(util.class_to_index)
                 label[i][j][label_index] = 1
-        return label     
+        return label 
    

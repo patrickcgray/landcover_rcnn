@@ -35,7 +35,6 @@ def read_windows(rasters, c, r, buffer, tile_size):
     #only works when rasters are in same projection
     for raster in rasters:
         tile = raster.read(list(np.arange(1, raster.count+1)), window=Window(c-buffer, r-buffer, tile_size, tile_size))
-        tiles.append(tile)
     return (*tiles,)
 
 def get_class_count():
@@ -178,7 +177,7 @@ class_names = dict((
 (52, "Scrub/Shrub"),
 (71, "Grassland / Herbaceous"),
 #(72, "Sedge / Herbaceous - ALASKA"),
-#(73, "Lichen / Herbaceous - ALASKA"),
+#(73, "Lichen / Herbaceous - ALASKA"),f
 #(74, "Moss - ALASKA"),
 (81, "Pasture/Hay"),
 (82, "Cultivated Land"),
@@ -189,7 +188,7 @@ class_names = dict((
 
 colors = dict((
     (11, (0,0,255)), #water ~ blue
-(12, (0,0,255)), #snow ~ white
+#(12, (0,0,255)), #snow ~ white
 (21, (255,0,0)), #open space developed ~ red
 (22, (50,0,0)), # low intensity developed ~ darker red
 (23, (50,0,0)), # medium intensity developed ~ darker darker red
@@ -208,21 +207,21 @@ colors = dict((
 
 class_to_index = dict((
 (11, 0),
-(12, 1),
-(21, 2),
-(22, 3),
-(23, 4),
-(24, 5),
-(31, 6),
-(41, 7),
-(42, 8),
-(43, 9),
-(52, 10),
-(71, 11),
-(81, 12),
-(82, 13),
-(90, 14),
-(95, 15),
+#(12, 1),
+(21, 4),
+(22, 1),
+(23, 1),
+(24, 1),
+(31, 4),
+(41, 2),
+(42, 2),
+(43, 2),
+(52, 2),
+(71, 3),
+(81, 3),
+(82, 3),
+(90, 2),
+(95, 2),
 ))
 
 
