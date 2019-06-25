@@ -43,8 +43,9 @@ class rnn_tile_gen():
         buffer = math.floor(tile_size / 2)
         while True:
             image_batch = np.zeros((batch_size, time_steps, tile_size, tile_size, band_count))
-            lc_batch = np.zeros((batch_size, tile_size*tile_size, class_count))
-            canopy_batch = np.zeros((batch_size, tile_size, tile_size))
+            #lc_batch = np.zeros((batch_size, tile_size*tile_size, class_count))
+            lc_batch = np.zeros((batch_size, tile_size,tile_size, class_count))
+            canopy_batch = np.zeros((batch_size, tile_size, tile_size, 1))
             b = 0
             while b < batch_size:
                 # if we're at the end  of the data just restart
@@ -82,12 +83,12 @@ class rnn_tile_gen():
                 if 0 not in lc_data and np.nan not in lc_data and np.nan not in canopy_data and 255 not in canopy_data and canopy_data.shape == (self.tile_length, self.tile_length):
                     lc_label = self.one_hot_encode(lc_data, tile_size, class_count)
                     if len(np.unique(lc_label)) != 1:
-                        lc_batch[b] = lc_label.reshape(tile_size*tile_size, class_count)
-                        #canopy_batch[b] = canopy_data/100
+                        lc_batch[b] = lc_label #lc_label.reshape(tile_size*tile_size, class_count)
+                        canopy_batch[b] = canopy_data.reshape((64, 64, 1)) / 100
                         total_tile = np.array((*reshaped_tiles,))
                         image_batch[b] = total_tile
                         b += 1
-            yield (image_batch, lc_batch)#{'landcover': lc_batch, 'canopy': canopy_batch})   
+            yield (image_batch, {'landcover': lc_batch, 'canopy': canopy_batch})   
             
     def one_hot_encode(self, data, tile_size, class_count):
         label = np.zeros((tile_size, tile_size, class_count))
