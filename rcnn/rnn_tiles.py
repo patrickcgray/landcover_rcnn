@@ -51,13 +51,11 @@ class rnn_tile_gen():
                 if i >= len(pixel_locations):
                     i=0
                 r, c = pixel_locations[i][0]
-                print("{},{}".format(r,c))
                 tile_num = pixel_locations[i][1]
                 i += 1
                 tiles_to_read = self.l8_dict[tile_num]
                 tiles_read = util.read_windows(tiles_to_read, c ,r, buffer, tile_size)
                 reshaped_tiles = []
-                
                 band_avg = [  345.72448081,   352.93755735,   319.34257128,   899.39728239,
          649.46125258,   370.53562465, -1084.8218946 ]
                 band_std = [ 661.75737932,  363.32761072,  425.28671553,  959.63442896,
@@ -65,8 +63,8 @@ class rnn_tile_gen():
                 for tile in tiles_read:
                     tile = tile[0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
-                   # for jj in range(7):
-                    #    reshaped_tile[:][:][jj] = np.divide(np.subtract(reshaped_tile[:][:][jj],band_avg[jj]),band_std[jj])
+                    #for jj in range(7):
+                     #   reshaped_tile[:][:][jj] = np.divide(np.subtract(reshaped_tile[:][:][jj],band_avg[jj]),band_std[jj])
                     reshaped_tiles.append(reshaped_tile)
                 ### get label data
                 # find gps of that pixel within the image

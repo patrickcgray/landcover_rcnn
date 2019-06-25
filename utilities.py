@@ -35,6 +35,7 @@ def read_windows(rasters, c, r, buffer, tile_size):
     #only works when rasters are in same projection
     for raster in rasters:
         tile = raster.read(list(np.arange(1, raster.count+1)), window=Window(c-buffer, r-buffer, tile_size, tile_size))
+        tiles.append(tile)
     return (*tiles,)
 
 def get_class_count():
@@ -162,6 +163,28 @@ def plot_confusion_matrix(y_true, y_pred, classes, class_dict,
 
 
 
+
+
+colors = dict((
+    (11, (0,0,255)), #water ~ blue
+#(12, (0,0,255)), #snow ~ white
+(21, (255,0,0)), #open space developed ~ red
+(22, (50,0,0)), # low intensity developed ~ darker red
+(23, (50,0,0)), # medium intensity developed ~ darker darker red
+(24, (50,0,0)), # high intensity developed ~ darker darker darker red
+(31, (153,76,0)), # barren land ~ dark orange
+(41, (0,204,0)), # deciduous forest ~ green
+(42, (0,153,0)), # evergreen forest ~ darker green
+(43, (0,102,0)), # mixed forest ~ darker darker green
+(52, (153,0,76)), #schrub ~ dark pink
+(71, (255,153,71)), # grass land ~  orange
+(81, (204,204,0)),#pasture ~ yellowish
+(82, (153,153,0)),#cultivated land ~ darker yellow
+(90, (0,255,255)), #woody wetland ~ aqua
+(95, (0,102,102)), #emergent herbaceous wetlands ~ darker aqua
+))
+
+
 class_names = dict((
 (11, "Water"),
 (12, "Snow/Ice"),
@@ -185,30 +208,10 @@ class_names = dict((
 (95, "Emergent Herbaceous Wetlands"),
 ))
 
-
-colors = dict((
-    (11, (0,0,255)), #water ~ blue
-#(12, (0,0,255)), #snow ~ white
-(21, (255,0,0)), #open space developed ~ red
-(22, (50,0,0)), # low intensity developed ~ darker red
-(23, (50,0,0)), # medium intensity developed ~ darker darker red
-(24, (50,0,0)), # high intensity developed ~ darker darker darker red
-(31, (153,76,0)), # barren land ~ dark orange
-(41, (0,204,0)), # deciduous forest ~ green
-(42, (0,153,0)), # evergreen forest ~ darker green
-(43, (0,102,0)), # mixed forest ~ darker darker green
-(52, (153,0,76)), #schrub ~ dark pink
-(71, (255,153,71)), # grass land ~  orange
-(81, (204,204,0)),#pasture ~ yellowish
-(82, (153,153,0)),#cultivated land ~ darker yellow
-(90, (0,255,255)), #woody wetland ~ aqua
-(95, (0,102,102)), #emergent herbaceous wetlands ~ darker aqua
-))
-
 class_to_index = dict((
 (11, 0),
 #(12, 1),
-(21, 4),
+(21, 3),
 (22, 1),
 (23, 1),
 (24, 1),
@@ -221,11 +224,20 @@ class_to_index = dict((
 (81, 3),
 (82, 3),
 (90, 2),
-(95, 2),
+(95, 5),
+))
+
+indexed_dictionary = dict((
+(0, "Water"),
+(1, "Developed"),
+(2, "Forest"),
+(3, "Cultivated"),
+(4, "Barren"),
+(5, "Wetland"),
 ))
 
 
-indexed_dictionary = dict((
+old_indexed_dictionary = dict((
 (0, "Water"),
 (1, "Snow/Ice"),
 (2, "Open Space Developed"),
