@@ -61,7 +61,7 @@ def train_val_test_split(pixels, train_val_ratio, val_test_ratio):
     
 def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
     buffer = math.floor(tile_size / 2)
-    cloud_list = [72, 80, 96, 130, 132, 136, 160, 224]
+    cloud_list = [224]#[72, 80, 96, 130, 132, 136, 160, 224]
     new_pixels = []
     l8_proj = Proj(l8_data['028012'][0].crs)
     lc_proj = Proj(lc_label.crs)
@@ -83,7 +83,9 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
         canopy_row, canopy_col = canopy_label.index(canopy_x,canopy_y)
         canopy_data = canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
         flag = True
-        if 0 in lc_data or np.nan in lc_data or np.nan in canopy_data or 255 in canopy_data or canopy_data.shape != (tile_size, tile_size) or len(np.unique(lc_data)) == 1:
+        if len(np.unique(lc_data)) == 1 and 11 in lc_data and tile_size != 1:
+            flag = False
+        if 0 in lc_data or np.nan in lc_data or np.nan in canopy_data or 255 in canopy_data or canopy_data.shape != (tile_size, tile_size):
             flag = False
         for tile in tiles_read:
             if np.isnan(tile).any() == True or -9999 in tile or tile.size == 0 or np.amax(tile) == 0 or np.isin(tile[7,:,:], cloud_list).any() or tile.shape != (l8_data[dataset_index][0].count, tile_size, tile_size):

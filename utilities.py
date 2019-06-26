@@ -22,11 +22,12 @@ def read_txt(filenames):
         list_px = opened_file.readlines()
         px = list()
         for line in list_px:
-            split = line.split()
-            index = split[1][-1]
-            row = split[0][1:-1]
-            col = split[1][:-2]
-            px.append(((int(row), int(col)),int(index)))
+            split = line.split(',')
+            row = split[0][1:]
+            split_2 = split[1].split(')')
+            col = split_2[0]
+            index = split_2[1]
+            px.append(((int(row), int(col)), str(index)[:-1]))
         pixels.append(px)
     return pixels
 
@@ -227,6 +228,25 @@ class_to_index = dict((
 (95, 5),
 ))
 
+old_class_to_index = dict((
+(11, 0),
+#(12, 1),
+(21, 1),
+(22, 2),
+(23, 2),
+(24, 2),
+(31, 3),
+(41, 4),
+(42, 5),
+(43, 6),
+(52, 7),
+(71, 8),
+(81, 9),
+(82, 10),
+(90, 11),
+(95, 12),
+))
+
 indexed_dictionary = dict((
 (0, "Water"),
 (1, "Developed"),
@@ -239,23 +259,23 @@ indexed_dictionary = dict((
 
 old_indexed_dictionary = dict((
 (0, "Water"),
-(1, "Snow/Ice"),
-(2, "Open Space Developed"),
-(3, "Low Intensity Developed"),
-(4, "Medium Intensity Developed"),
-(5, "High Intensity Developed"),
-(6, "Barren Land"),
-(7, "Deciduous Forest"),
-(8, "Evergreen Forest"),
-(9, "Mixed Forest"),
+#(1, "Snow/Ice"),
+(1, "Open Space Developed"),
+(2, "Low Intensity Developed"),
+#(3, "Medium Intensity Developed"),
+#(4, "High Intensity Developed"),
+(3, "Barren Land"),
+(4, "Deciduous Forest"),
+(5, "Evergreen Forest"),
+(6, "Mixed Forest"),
 #(51, "Dwarf Scrub/Shrub - ALASKA"),
-(10, "Scrub/Shrub"),
-(11, "Grassland / Herbaceous"),
+(7, "Scrub/Shrub"),
+(8, "Grassland / Herbaceous"),
 #(72, "Sedge / Herbaceous - ALASKA"),
 #(73, "Lichen / Herbaceous - ALASKA"),
 #(74, "Moss - ALASKA"),
-(12, "Pasture/Hay"),
-(13, "Cultivated Land"),
-(14, "Woody Wetland"),
-(15, "Emergent Herbaceous Wetlands"),
+(9, "Pasture/Hay"),
+(10, "Cultivated Land"),
+(11, "Woody Wetland"),
+(12, "Emergent Herbaceous Wetlands"),
 ))
