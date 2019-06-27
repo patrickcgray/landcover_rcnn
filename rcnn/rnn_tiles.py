@@ -95,7 +95,7 @@ class rnn_tile_gen():
                     total_tile = np.array((*reshaped_tiles,))
                     image_batch[b] = total_tile.reshape((4,7))
                 else:
-                    lc_batch[b] = lc_label #lc_label.reshape(tile_size*tile_size, class_count)
+                    lc_batch[b] = lc_label #lc_label.reshape(tile_size*tile_size, class_count)      
                     canopy_batch[b] = canopy_data.reshape((tile_size, tile_size, 1)) / 100
                     total_tile = np.array((*reshaped_tiles,))
                     image_batch[b] = total_tile
