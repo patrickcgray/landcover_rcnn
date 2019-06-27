@@ -112,7 +112,6 @@ class rnn_tile_gen():
         for i in range(tile_size):
             for j in range(tile_size):
                 label_index = util.class_to_index[data[i][j]]
-                #print(util.class_to_index)
                 label[i][j][label_index] = 1
         return label 
    
