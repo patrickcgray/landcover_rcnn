@@ -66,6 +66,7 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
     l8_proj = Proj(l8_data['028012'][0].crs)
     lc_proj = Proj(lc_label.crs)
     canopy_proj = Proj(canopy_label.crs)
+    counter = 0
     for pixel in pixels:
         r, c = pixel[0]
         dataset_index = pixel[1]
@@ -73,12 +74,18 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
         tiles_read = util.read_windows(tiles_to_read, c ,r, buffer, tile_size)
         (x, y) = l8_data[dataset_index][0].xy(r, c) 
         # convert the point we're sampling from to the same projection as the label dataset if necessary
-        if l8_proj != lc_proj:
-            lc_x,lc_y = transform(l8_proj,lc_proj,x,y)
-        if l8_proj != canopy_proj:
-            canopy_x, canopy_y = transform(l8_proj,canopy_proj,x,y)
-         # reference gps in label_image
+        #if l8_proj != lc_proj:
+            #lc_x,lc_y = transform(l8_proj,lc_proj,x,y)
+        lc_x,lc_y = x,y
+        # these are broken and not working for some reason because pyproj doesn't understand the canopy projection
+        #if l8_proj != canopy_proj:
+        #    canopy_x, canopy_y = transform(l8_proj,canopy_proj,x,y)
+        # but luckily there only a couple cm different so it shouldn't matter
+        canopy_x = x
+        canopy_y = y
+        # reference gps in label_image
         lc_row, lc_col = lc_label.index(lc_x,lc_y)
+ 
         lc_data = lc_label.read(1, window=Window(lc_col-buffer, lc_row-buffer, tile_size, tile_size))
         canopy_row, canopy_col = canopy_label.index(canopy_x,canopy_y)
         canopy_data = canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
@@ -87,12 +94,16 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
             flag = False
         if 0 in lc_data or np.nan in lc_data or np.nan in canopy_data or 255 in canopy_data or canopy_data.shape != (tile_size, tile_size):
             flag = False
+        counter += 1
         for tile in tiles_read:
             if np.isnan(tile).any() == True or -9999 in tile or tile.size == 0 or np.amax(tile) == 0 or np.isin(tile[7,:,:], cloud_list).any() or tile.shape != (l8_data[dataset_index][0].count, tile_size, tile_size):
                 flag = False
                 break
         if flag:
             new_pixels.append(pixel)
+            
+        if counter % 1000 == 0:
+            print(counter)
     return new_pixels    
 
 #        if max_size != None and len(new_pixels) == max_size:

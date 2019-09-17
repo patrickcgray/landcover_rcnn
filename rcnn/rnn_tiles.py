@@ -79,10 +79,14 @@ class rnn_tile_gen():
                 # find gps of that pixel within the image
                 (x, y) = self.l8_dict[tile_num][0].xy(r, c) 
                 # convert the point we're sampling from to the same projection as the label dataset if necessary
-                if l8_proj != lc_proj:
-                    lc_x,lc_y = transform(l8_proj,lc_proj,x,y)
-                if l8_proj != canopy_proj:
-                    canopy_x, canopy_y = transform(l8_proj,canopy_proj,x,y)
+                # TODO not working here either
+                #if l8_proj != lc_proj:
+                #    lc_x,lc_y = transform(l8_proj,lc_proj,x,y)
+                lc_x,lc_y = x,y
+                # TODO not working here either
+                #if l8_proj != canopy_proj:
+                #    canopy_x, canopy_y = transform(l8_proj,canopy_proj,x,y)
+                canopy_x, canopy_y = x,y
                 # reference gps in label_image
                 lc_row, lc_col = self.lc_label.index(lc_x,lc_y)
                 lc_data = self.lc_label.read(1, window=Window(lc_col-buffer, lc_row-buffer, tile_size, tile_size))
