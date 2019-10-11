@@ -94,10 +94,12 @@ class rnn_tile_gen():
                 canopy_data = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
                 lc_label = self.one_hot_encode(lc_data, tile_size, class_count)
                 if flatten:
-                    lc_batch[b] = lc_label.reshape(class_count)
-                    canopy_batch[b] = canopy_data.reshape(1) / 100
+                    lc_shape = lc_label[3][3].shape
+                    lc_batch[b] = lc_label[3][3].reshape(class_count)
+                    canopy_batch[b] = canopy_data[3][3].reshape(1) / 100
                     total_tile = np.array((*reshaped_tiles,))
-                    image_batch[b] = total_tile.reshape((4,7))
+                    image_batch[b] = total_tile[:,3,3,:].reshape((4,7))
+                    
                 else:
                     lc_batch[b] = lc_label #lc_label.reshape(tile_size*tile_size, class_count)      
                     canopy_batch[b] = canopy_data.reshape((tile_size, tile_size, 1)) / 100
