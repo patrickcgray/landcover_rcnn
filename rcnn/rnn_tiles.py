@@ -87,7 +87,6 @@ class rnn_tile_gen():
                 lc_label = self.one_hot_encode(lc_data, 1, class_count)
                 lc_batch[b] = lc_label.reshape(class_count)
                 canopy_batch[b] = canopy_data.reshape(1) / 100
-                
                 rnn_total_tile = np.array((*rnn_reshaped_tiles,))
                 rnn_image_batch[b] = rnn_total_tile.reshape((4,7))
                 total_tile = np.array((*reshaped_tiles,))
