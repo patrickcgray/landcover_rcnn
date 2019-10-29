@@ -91,7 +91,9 @@ class rnn_tile_gen():
                 lc_row, lc_col = self.lc_label.index(lc_x,lc_y)
                 lc_data = self.lc_label.read(1, window=Window(lc_col-buffer, lc_row-buffer, tile_size, tile_size))
                 canopy_row, canopy_col = self.canopy_label.index(canopy_x,canopy_y)
-                canopy_data = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
+                canopy_data = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, 1))
+                canopy_data_single = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, 1, tile_size))
+
                 lc_label = self.one_hot_encode(lc_data, tile_size, class_count)
                 if flatten:
                     lc_shape = lc_label[3][3].shape
@@ -107,7 +109,7 @@ class rnn_tile_gen():
                     image_batch[b] = total_tile
                 b += 1
             if canopy:
-                yield (image_batch, {'landcover': lc_batch, 'canopy': canopy_batch})
+                yield ({'single': canopy_data_singles, 'tile' : image_batch}, {'landcover': lc_batch, 'canopy': canopy_batch})
             else: 
                 yield (image_batch, lc_batch)
             
