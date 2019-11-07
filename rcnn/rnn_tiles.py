@@ -68,9 +68,8 @@ class rnn_tile_gen():
                     tile = tiles_read[index][0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
                     rnn_reshaped_tile = reshape_as_image(rnn_tile).astype(np.float64)
-                    for jj in range(7):
-                        rnn_reshaped_tile[0][0][jj] = np.divide(np.subtract(rnn_reshaped_tile[0][0][jj],band_avg[jj]),band_std[jj])
-                        reshaped_tile[:][:][jj] = np.divide(np.subtract(reshaped_tile[:][:][jj],band_avg[jj]),band_std[jj])
+                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)                 
+                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
                     reshaped_tiles.append(reshaped_tile)
                     rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data
@@ -96,7 +95,9 @@ class rnn_tile_gen():
                 yield ({"rnn_input":rnn_image_batch, "tile_input":image_batch}, {'landcover': lc_batch, 'canopy': canopy_batch})
             else: 
                 yield (image_batch, lc_batch)
-            
+    # TODO there is probably an efficient scikit learn fcn for this
+    # also merging can be done more efficiently with something like 
+    #     lc_data_merged = np.vectorize(util.class_to_index.get)(lc_data)
     def one_hot_encode(self, data, tile_size, class_count):
         label = np.zeros((tile_size, tile_size, class_count))
         flag = True

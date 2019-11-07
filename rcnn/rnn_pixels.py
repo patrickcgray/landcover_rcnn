@@ -59,7 +59,7 @@ def train_val_test_split(pixels, train_val_ratio, val_test_ratio):
     print("train:{} val:{} test:{}".format(len(train_px), len(val_px), len(test_px)))
     return (train_px, val_px, test_px)
     
-def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
+def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size, buffer_pix=None):
     buffer = math.floor(tile_size / 2)
     cloud_list = [224]#[72, 80, 96, 130, 132, 136, 160, 224]
     new_pixels = []
@@ -67,6 +67,7 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
     lc_proj = Proj(lc_label.crs)
     canopy_proj = Proj(canopy_label.crs)
     counter = 0
+    center_index = math.floor(tile_size / 2)
     for pixel in pixels:
         r, c = pixel[0]
         dataset_index = pixel[1]
@@ -90,20 +91,34 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size):
         canopy_row, canopy_col = canopy_label.index(canopy_x,canopy_y)
         canopy_data = canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
         flag = True
-        if len(np.unique(lc_data)) == 1 and 11 in lc_data and tile_size != 1:
-            flag = False
+        # this used to eliminate pixels with only a single value to balance the FCN but now we don't want that
+        #if len(np.unique(lc_data)) == 1 and 11 in lc_data and tile_size != 1:
+        #    flag = False
+        
         if 0 in lc_data or np.nan in lc_data or np.nan in canopy_data or 255 in canopy_data or canopy_data.shape != (tile_size, tile_size):
             flag = False
-        counter += 1
-        for tile in tiles_read:
-            if np.isnan(tile).any() == True or -9999 in tile or tile.size == 0 or np.amax(tile) == 0 or np.isin(tile[7,:,:], cloud_list).any() or tile.shape != (l8_data[dataset_index][0].count, tile_size, tile_size):
+        #counter += 1
+        
+        if flag:
+            # TODO this can very likely be optimized and doesn't need to be a for loop
+            for tile in tiles_read:
+                if np.isnan(tile).any() == True or -9999 in tile or tile.size == 0 or np.amax(tile) == 0 or np.isin(tile[7,:,:], cloud_list).any() or tile.shape != (l8_data[dataset_index][0].count, tile_size, tile_size):
+                    flag = False
+                    break
+                
+        if buffer_pix and flag:
+            # check all surrounding pixels with a radius of buffer_pix and if any are a different value then 
+            # flag it and don't include it in the output
+            lc_data_merged = np.vectorize(util.class_to_index.get)(lc_data)
+            if len(np.unique(lc_data_merged[center_index-buffer_pix:center_index+buffer_pix+1, center_index-buffer_pix:center_index+buffer_pix+1])) != 1:
                 flag = False
-                break
+        
         if flag:
             new_pixels.append(pixel)
             
         if counter % 1000 == 0:
-            print(counter)
+            #print(counter)
+            pass
     return new_pixels    
 
 #        if max_size != None and len(new_pixels) == max_size:
