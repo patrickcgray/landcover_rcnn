@@ -14,9 +14,10 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 import utilities as util
 import importlib
-importlib.reload(util)
+import rnn_tiles
 
 def make_pixels(tile_size, tile_list):
+    # return every potentially viable center tile location from all landsat images shuffled
     points = []
     l8_points = []
     buffer = math.floor(tile_size/2)
@@ -121,7 +122,87 @@ def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size, buffer_
             pass
     return new_pixels    
 
-#        if max_size != None and len(new_pixels) == max_size:
-#           return new_pixels# max_size=None
+def make_clean_pix(tile_list, tile_size, landsat_datasets,lc_labels, canopy_labels, pix_count, buffer_pix=1):
+    px = make_pixels(tile_size, tile_list)
+    px_to_use = px[:pix_count]
+    pixels = delete_bad_tiles(landsat_datasets,lc_labels, canopy_labels, px_to_use, tile_size, buffer_pix=buffer_pix)
+    return(pixels)
 
+def balanced_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, tile_list, 
+            clean_pixels_count, class_count, count_per_class, class_dict, buffer_pix=1, print_class_counts=True):
+    # gets shuffled and balanced pixels locations ready for ingestion by model
+    
+    print("Beginning balanced pixel creation.")
 
+    pixels = make_clean_pix(tile_list, tile_size, landsat_datasets,lc_labels, canopy_labels, 
+                                       clean_pixels_count, buffer_pix=1)
+    
+    print("Clean pix generated, starting generator.")
+   
+    w_tile_gen = rnn_tiles.rnn_tile_gen(landsat_datasets, lc_labels, canopy_labels, tile_size, class_count)
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    
+    print("Iterating through data and clipping for balance.")
+
+    buckets = {}
+
+    for key in class_dict:
+        buckets[key] = []
+
+    count = 0
+    while count < len(pixels):
+            image_b, label_b = next(w_generator)
+            label_b = np.argmax(label_b['landcover'])
+            buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+            count+=1
+
+    if print_class_counts:
+        print("\nClass counts:")
+        for z, j in buckets.items():
+            print(class_dict[z], len(j))
+        print("")    
+    use_px = []
+    for key in class_dict:
+        use_px+=buckets[key][:count_per_class]
+
+    random.shuffle(use_px)
+    train_px, val_px, test_px = train_val_test_split(use_px, 0.8, 0.8)
+    
+    print("\nProcessing Complete.")
+    
+    return(train_px, val_px, test_px)
+
+def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, tile_list, 
+                           clean_pixels_count, class_count, count_per_class, class_dict, buffer_pix=1):
+    # gets shuffled and balanced pixels data ready for ingestion viz and scikit learn
+    
+    print("Beginning balanced data creation.")
+
+    pixels = make_clean_pix(tile_list, tile_size, landsat_datasets,lc_labels, canopy_labels, 
+                                       clean_pixels_count, buffer_pix=1)
+    
+    print("Clean pix generated, starting generator.")
+   
+    w_tile_gen = rnn_tiles.rnn_tile_gen(landsat_datasets, lc_labels, canopy_labels, tile_size, class_count)
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    
+    print("Iterating through data and clipping for balance.")
+
+    image_buckets = {}
+
+    for key in class_dict:
+        image_buckets[key] = []       
+
+    count = 0
+    while count < len(pixels):
+            image_b, label_b = next(w_generator)
+            label_b = np.argmax(label_b['landcover'])
+            image_buckets[label_b].append(image_b['rnn_input'])
+            count+=1
+            
+    for key in class_dict:
+        image_buckets[key] = image_buckets[key][:count_per_class]
+        
+    print("Processing Complete.")
+    
+    return(image_buckets)
