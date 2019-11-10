@@ -242,9 +242,9 @@ old_class_to_index = dict((
 (52, 7),
 (71, 8),
 (81, 9),
-(82, 10),
-(90, 11),
-(95, 12),
+(82, 9),
+(90, 10),
+(95, 11),
 ))
 
 indexed_dictionary = dict((
@@ -275,7 +275,7 @@ old_indexed_dictionary = dict((
 #(73, "Lichen / Herbaceous - ALASKA"),
 #(74, "Moss - ALASKA"),
 (9, "Pasture/Hay"),
-(10, "Cultivated Land"),
-(11, "Woody Wetland"),
-(12, "Emergent Herbaceous Wetlands"),
+#(10, "Cultivated Land"),
+(10, "Woody Wetland"),
+(11, "Emergent Herbaceous Wetlands"),
 ))

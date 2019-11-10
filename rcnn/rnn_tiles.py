@@ -87,7 +87,7 @@ class rnn_tile_gen():
                 lc_batch[b] = lc_label.reshape(class_count)
                 canopy_batch[b] = canopy_data.reshape(1) / 100
                 rnn_total_tile = np.array((*rnn_reshaped_tiles,))
-                rnn_image_batch[b] = rnn_total_tile.reshape((4,7))
+                rnn_image_batch[b] = rnn_total_tile.reshape((len(tiles_read),7))
                 total_tile = np.array((*reshaped_tiles,))
                 image_batch[b] = total_tile
                 b += 1
@@ -104,7 +104,7 @@ class rnn_tile_gen():
         count = 0 
         for i in range(tile_size):
             for j in range(tile_size):
-                label_index = util.class_to_index[data[i][j]]
+                label_index = util.old_class_to_index[data[i][j]]
                 label[i][j][label_index] = 1
         return label 
    
