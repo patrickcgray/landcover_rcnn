@@ -179,7 +179,7 @@ def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, til
     print("Beginning balanced data creation.")
 
     pixels = make_clean_pix(tile_list, tile_size, landsat_datasets,lc_labels, canopy_labels, 
-                                       clean_pixels_count, buffer_pix=1)
+                                       clean_pixels_count, buffer_pix=buffer_pix)
     
     print("Clean pix generated, starting generator.")
    
@@ -188,22 +188,22 @@ def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, til
     
     print("Iterating through data and clipping for balance.")
 
-    image_buckets = {}
-
+    class_count_dict = {}
     for key in class_dict:
-        image_buckets[key] = []       
+        class_count_dict[key] = 0       
 
     count = 0
+    sk_data = []
+    sk_labels = []
     while count < len(pixels):
             image_b, label_b = next(w_generator)
-            label_b = np.argmax(label_b['landcover'])
-            image_buckets[label_b].append(image_b['rnn_input'])
+            lc_class = np.argmax(label_b['landcover'])
+            if class_count_dict[lc_class] < count_per_class:
+                sk_data.append(image_b['rnn_input'].flatten())
+                sk_labels.append(lc_class)
+                class_count_dict[lc_class] += 1
             count+=1
-            
-    data_buckets = []
-    for key in class_dict:
-        data_buckets.append(np.array(image_buckets[key][:count_per_class]))
-        
+       
     print("Processing Complete.")
     
-    return(np.array(data_buckets))
+    return(np.array(sk_data), np.array(sk_labels), class_count_dict)
