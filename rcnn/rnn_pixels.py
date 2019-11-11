@@ -200,9 +200,10 @@ def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, til
             image_buckets[label_b].append(image_b['rnn_input'])
             count+=1
             
+    data_buckets = []
     for key in class_dict:
-        image_buckets[key] = image_buckets[key][:count_per_class]
+        data_buckets.append(np.array(image_buckets[key][:count_per_class]))
         
     print("Processing Complete.")
     
-    return(image_buckets)
+    return(np.array(data_buckets))
