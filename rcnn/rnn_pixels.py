@@ -149,6 +149,7 @@ def balanced_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size
     for key in class_dict:
         buckets[key] = []
 
+
     count = 0
     while count < len(pixels):
             image_b, label_b = next(w_generator)
@@ -156,11 +157,10 @@ def balanced_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size
             buckets[label_b].append(pixels[count]) # appends pixels to dictionary
             count+=1
 
-    if print_class_counts:
-        print("\nClass counts:")
-        for z, j in buckets.items():
-            print(class_dict[z], len(j))
-        print("")    
+    count_dict = {}
+    for z, j in buckets.items():
+        count_dict[class_dict[z]] = len(j)
+        
     use_px = []
     for key in class_dict:
         use_px+=buckets[key][:count_per_class]
@@ -170,7 +170,7 @@ def balanced_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size
     
     print("\nProcessing Complete.")
     
-    return(train_px, val_px, test_px)
+    return(train_px, val_px, test_px, count_dict)
 
 def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, tile_list, 
                            clean_pixels_count, class_count, count_per_class, class_dict, buffer_pix=1):
