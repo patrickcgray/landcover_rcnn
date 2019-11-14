@@ -200,7 +200,7 @@ def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, til
             lc_class = np.argmax(label_b['landcover'])
             if class_count_dict[lc_class] < count_per_class:
                 sk_data.append(image_b['rnn_input'].flatten())
-                sk_labels.append(lc_class)
+                sk_labels.append([lc_class, label_b['canopy']])
                 class_count_dict[lc_class] += 1
             count+=1
        
