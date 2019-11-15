@@ -42,15 +42,10 @@ class rnn_tile_gen():
         class_count = self.class_count
         buffer = math.floor(tile_size / 2)
         while True:
-            if flatten:
-                image_batch = np.zeros((batch_size, time_steps, band_count))
-                lc_batch = np.zeros((batch_size, class_count))
-                canopy_batch = np.zeros((batch_size, 1))
-
-            else:
-                image_batch = np.zeros((batch_size, time_steps, tile_size, tile_size, band_count))
-                lc_batch = np.zeros((batch_size, tile_size,tile_size, class_count))
-                canopy_batch = np.zeros((batch_size, tile_size, tile_size, 1))
+            lc_batch = np.zeros((batch_size, class_count))
+            canopy_batch = np.zeros((batch_size, 1))
+            image_batch = np.zeros((batch_size, time_steps, tile_size, tile_size, band_count))
+            rnn_image_batch = np.zeros((batch_size, time_steps, band_count))
             b = 0
             while b < batch_size:
                 # if we're at the end  of the data just restart
@@ -61,54 +56,48 @@ class rnn_tile_gen():
                 i += 1
                 tiles_to_read = self.l8_dict[tile_num]
                 tiles_read = util.read_windows(tiles_to_read, c ,r, buffer, tile_size)
+                rnn_tiles_read = util.read_windows(tiles_to_read, c ,r, 0, 1)
                 reshaped_tiles = []
+                rnn_reshaped_tiles = []
                 band_avg = [  345.72448081,   352.93755735,   319.34257128,   899.39728239,
          649.46125258,   370.53562465, -1084.8218946 ]
                 band_std = [ 661.75737932,  363.32761072,  425.28671553,  959.63442896,
         838.86193201,  501.96992987, 3562.42995552]
-                for tile in tiles_read:
-                    tile = tile[0:7]
+                for index in range(len(tiles_read)):
+                    rnn_tile = rnn_tiles_read[index][0:7]
+                    tile = tiles_read[index][0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
-                    for jj in range(7):
-                        if flatten:
-                            reshaped_tile[0][0][jj] = np.divide(np.subtract(reshaped_tile[0][0][jj],band_avg[jj]),band_std[jj])
-                        else:
-                            reshaped_tile[:][:][jj] = np.divide(np.subtract(reshaped_tile[:][:][jj],band_avg[jj]),band_std[jj])
+                    rnn_reshaped_tile = reshape_as_image(rnn_tile).astype(np.float64)
+                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)                 
+                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
                     reshaped_tiles.append(reshaped_tile)
+                    rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data
                 # find gps of that pixel within the image
                 (x, y) = self.l8_dict[tile_num][0].xy(r, c) 
                 # convert the point we're sampling from to the same projection as the label dataset if necessary
-                # TODO not working here either
-                #if l8_proj != lc_proj:
-                #    lc_x,lc_y = transform(l8_proj,lc_proj,x,y)
                 lc_x,lc_y = x,y
-                # TODO not working here either
-                #if l8_proj != canopy_proj:
-                #    canopy_x, canopy_y = transform(l8_proj,canopy_proj,x,y)
                 canopy_x, canopy_y = x,y
                 # reference gps in label_image
                 lc_row, lc_col = self.lc_label.index(lc_x,lc_y)
-                lc_data = self.lc_label.read(1, window=Window(lc_col-buffer, lc_row-buffer, tile_size, tile_size))
+                lc_data = self.lc_label.read(1, window=Window(lc_col, lc_row, 1, 1))
                 canopy_row, canopy_col = self.canopy_label.index(canopy_x,canopy_y)
-                canopy_data = self.canopy_label.read(1, window=Window(canopy_col-buffer, canopy_row-buffer, tile_size, tile_size))
-                lc_label = self.one_hot_encode(lc_data, tile_size, class_count)
-                if flatten:
-                    lc_batch[b] = lc_label.reshape(class_count)
-                    canopy_batch[b] = canopy_data.reshape(1) / 100
-                    total_tile = np.array((*reshaped_tiles,))
-                    image_batch[b] = total_tile.reshape((4,7))
-                else:
-                    lc_batch[b] = lc_label #lc_label.reshape(tile_size*tile_size, class_count)      
-                    canopy_batch[b] = canopy_data.reshape((tile_size, tile_size, 1)) / 100
-                    total_tile = np.array((*reshaped_tiles,))
-                    image_batch[b] = total_tile
+                canopy_data = self.canopy_label.read(1, window=Window(canopy_col, canopy_row, 1, 1))
+                lc_label = self.one_hot_encode(lc_data, 1, class_count)
+                lc_batch[b] = lc_label.reshape(class_count)
+                canopy_batch[b] = canopy_data.reshape(1) / 100
+                rnn_total_tile = np.array((*rnn_reshaped_tiles,))
+                rnn_image_batch[b] = rnn_total_tile.reshape((len(tiles_read),7))
+                total_tile = np.array((*reshaped_tiles,))
+                image_batch[b] = total_tile
                 b += 1
             if canopy:
-                yield (image_batch, {'landcover': lc_batch, 'canopy': canopy_batch})
+                yield ({"rnn_input":rnn_image_batch, "tile_input":image_batch}, {'landcover': lc_batch, 'canopy': canopy_batch})
             else: 
                 yield (image_batch, lc_batch)
-            
+    # TODO there is probably an efficient scikit learn fcn for this
+    # also merging can be done more efficiently with something like 
+    #     lc_data_merged = np.vectorize(util.class_to_index.get)(lc_data)
     def one_hot_encode(self, data, tile_size, class_count):
         label = np.zeros((tile_size, tile_size, class_count))
         flag = True
