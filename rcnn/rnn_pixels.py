@@ -16,7 +16,7 @@ import utilities as util
 import importlib
 import rnn_tiles
 
-def make_pixels(tile_size, tile_list):
+def make_pixels(tile_size, tile_list, shuffle=True):
     # return every potentially viable center tile location from all landsat images shuffled
     points = []
     l8_points = []
@@ -31,7 +31,8 @@ def make_pixels(tile_size, tile_list):
     for tile in tile_list:
         for point in points:
             l8_points.append((point, tile))
-    random.shuffle(l8_points)
+    if shuffle:
+        random.shuffle(l8_points)
     return l8_points
 
 
@@ -207,3 +208,29 @@ def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, til
     print("Processing Complete.")
     
     return(np.array(sk_data), np.array(sk_labels), class_count_dict)
+
+def all_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_list, class_count, row_start, row_end):
+    
+    print("Beginning data creation.")
+    
+    pixels = make_pixels(1, tile_list, shuffle=False)[row_start:row_end]
+    
+    print("Pix generated, starting generator.")
+   
+    w_tile_gen = rnn_tiles.rnn_tile_gen(landsat_datasets, lc_labels, canopy_labels, 1, class_count)
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    
+    count = 0
+    sk_data = []
+    sk_labels = []
+    while count < len(pixels):
+            image_b, label_b = next(w_generator)
+            lc_class = np.argmax(label_b['landcover'])        
+            sk_data.append(image_b['rnn_input'].flatten())
+            sk_labels.append([lc_class, label_b['canopy']])
+            count+=1
+       
+    print("Processing Complete.")
+    
+    return(np.array(sk_data), np.array(sk_labels), np.array(pixels))
+
