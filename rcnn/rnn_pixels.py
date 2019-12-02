@@ -173,6 +173,138 @@ def balanced_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size
     
     return(train_px, val_px, test_px, count_dict)
 
+def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, tile_list, 
+            pixels, test_per_class, val_per_class, train_per_class, class_dict):
+    # gets shuffled and balanced pixels locations ready for ingestion by model
+    
+    print("Beginning TVT pixel creation.")
+    
+    class_count = len(class_dict)
+    tile_buffer = int(tile_size / 2)
+   
+    w_tile_gen = rnn_tiles.rnn_tile_gen(landsat_datasets, lc_labels, canopy_labels, 1, class_count)
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    
+    print("Iterating through data and clipping for balance.")
+
+    test_buckets = {}
+    val_buckets = {}
+    train_buckets = {}
+    
+    test_count = 0
+    val_count = 0
+    train_count = 0
+    count = 0
+
+    for key in class_dict:
+        test_buckets[key] = []
+        val_buckets[key] = []
+        train_buckets[key] = []
+        
+    
+    test_total = test_per_class * class_count    
+    test_locations = np.empty((test_total, 2))
+    
+    val_total = val_per_class * class_count    
+    val_locations = np.empty((val_total, 2))
+    
+    train_total = train_per_class * class_count    
+    train_locations = np.empty((train_total, 2))
+        
+    # buffering is already done, all pix are homogenous
+    
+    # test data
+    # if there are still more test pixels needed overall
+    while test_count < test_total:
+        if count >= len(pixels):
+            break
+        image_b, label_b = next(w_generator)
+        label_b = np.argmax(label_b['landcover'])
+        # if there are more test pixels needed in this specific class
+        if len(test_buckets[label_b]) < test_per_class:
+            x_loc = pixels[count][0][0]
+            y_loc = pixels[count][0][1]
+            # create exclusion buffers where the other pixels cannot be
+            x_exclusion = np.arange(x_loc-1,x_loc+2)
+            y_exclusion = np.arange(y_loc-1,y_loc+2)
+            # if that pixel doesn't fall within 1 px of existing test pixels then continue
+            if not(np.isin(test_locations[:,0], x_exclusion).any() and np.isin(test_locations[:,1], y_exclusion).any()):
+                test_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                test_locations[test_count] = pixels[count][0]
+                test_count+=1
+        count += 1       
+    
+    w_generator.close()
+    
+    # validation data
+    count = 0
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    while val_count < val_total:
+        if count >= len(pixels):
+            break
+        image_b, label_b = next(w_generator)
+        label_b = np.argmax(label_b['landcover'])
+        # if there are more val pixels needed in this specific class
+        if len(val_buckets[label_b]) < val_per_class:
+            x_loc = pixels[count][0][0]
+            y_loc = pixels[count][0][1]
+            # create exclusion buffers so there is no overlap with test data
+            x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
+            y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
+            if not(np.isin(test_locations[:,0], x_exclusion).any() and np.isin(test_locations[:,1], y_exclusion).any()):
+                x_exclusion = np.arange(x_loc-1,x_loc+2)
+                y_exclusion = np.arange(y_loc-1,y_loc+2)
+                # if that pixel doesn't fall within 1 px of existing val pixels then continue
+                if not(np.isin(val_locations[:,0], x_exclusion).any() and np.isin(val_locations[:,1], y_exclusion).any()):
+                    val_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                    val_locations[val_count] = pixels[count][0]
+                    val_count+=1
+        count += 1 
+     
+    w_generator.close()
+        
+    # train data
+    # not certain we want to restart the generator but it shouldn't take too long
+    count = 0
+    w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
+    
+    while train_count < train_total:
+        if count >= len(pixels):
+            break
+        image_b, label_b = next(w_generator)
+        label_b = np.argmax(label_b['landcover'])
+        # if there are more train pixels needed in this specific class
+        if len(train_buckets[label_b]) < train_per_class:
+            x_loc = pixels[count][0][0]
+            y_loc = pixels[count][0][1]
+            # create exclusion buffers so there is no overlap with test data
+            x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
+            y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
+            if not(np.isin(test_locations[:,0], x_exclusion).any() and np.isin(test_locations[:,1], y_exclusion).any()):
+                   if not(np.isin(val_locations[:,0], x_exclusion).any() and np.isin(val_locations[:,1], y_exclusion).any()):
+                        train_buckets[label_b].append(pixels[count])
+                        train_locations[train_count] = pixels[count][0]
+                        train_count+=1
+        count += 1 
+        
+    w_generator.close()
+    
+    train_px = []
+    val_px = []
+    test_px = []
+    
+    for key in class_dict:
+        test_px+=test_buckets[key]
+        val_px+=val_buckets[key]
+        train_px+=train_buckets[key]
+
+    random.shuffle(test_px)
+    random.shuffle(val_px)
+    random.shuffle(train_px)
+    print("\nProcessing Complete.")
+    
+    return(train_px, val_px, test_px)
+
 def balanced_pix_data(landsat_datasets, lc_labels, canopy_labels, tile_size, tile_list, 
                            clean_pixels_count, class_count, count_per_class, class_dict, buffer_pix=1):
     # gets shuffled and balanced pixels data ready for ingestion viz and scikit learn
