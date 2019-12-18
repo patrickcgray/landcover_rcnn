@@ -186,6 +186,10 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
     w_generator = w_tile_gen.tile_generator(pixels, batch_size=1, flatten=True, canopy=True)
     
     print("Iterating through data and clipping for balance.")
+    
+    tile_dict = {}
+    for idx, item in enumerate(tile_list):
+        tile_dict[item] = idx
 
     test_buckets = {}
     val_buckets = {}
@@ -202,7 +206,7 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
         train_buckets[key] = []
         
     # this is for quickly checking if pixels overlap
-    pixel_matrix = np.zeros((5000,5000))
+    pixel_matrix = np.zeros((5000,5000, len(tile_list)))
     
     test_total = test_per_class * class_count    
     val_total = val_per_class * class_count    
@@ -220,15 +224,17 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
         # if there are more test pixels needed in this specific class
         if len(test_buckets[label_b]) < test_per_class:
             pixel_coords = pixels[count][0]
+            landsat_tile = pixels[count][1]
+            tile_index = tile_dict[landsat_tile]
             x_loc = pixel_coords[0]
             y_loc = pixel_coords[1]
             # create exclusion buffers where the other pixels cannot be
             x_exclusion = np.arange(x_loc-1,x_loc+2)
             y_exclusion = np.arange(y_loc-1,y_loc+2)
             # if that pixel doesn't fall within 1 px of existing test pixels then continue
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion], 1).any()):
+            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
                 test_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
-                pixel_matrix[pixel_coords] = 1
+                pixel_matrix[pixel_coords + (tile_index,)] = 1
                 test_count+=1
         count += 1       
     
@@ -245,18 +251,20 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
         # if there are more val pixels needed in this specific class
         if len(val_buckets[label_b]) < val_per_class:
             pixel_coords = pixels[count][0]
+            landsat_tile = pixels[count][1]
+            tile_index = tile_dict[landsat_tile]
             x_loc = pixel_coords[0]
             y_loc = pixel_coords[1]
             # create exclusion buffers so there is no overlap with test data
             x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
             y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion], 1).any()):
+            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
                 x_exclusion = np.arange(x_loc-1,x_loc+2)
                 y_exclusion = np.arange(y_loc-1,y_loc+2)
                 # if that pixel doesn't fall within 1 px of existing val pixels then continue
-                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion], 2).any()):
+                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 2).any()):
                     val_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
-                    pixel_matrix[pixel_coords] = 2
+                    pixel_matrix[pixel_coords + (tile_index,)] = 2
                     val_count+=1
         count += 1 
      
@@ -274,15 +282,17 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
         # if there are more train pixels needed in this specific class
         if len(train_buckets[label_b]) < train_per_class:
             pixel_coords = pixels[count][0]
+            landsat_tile = pixels[count][1]
+            tile_index = tile_dict[landsat_tile]
             x_loc = pixel_coords[0]
             y_loc = pixel_coords[1]
             # create exclusion buffers so there is no overlap with test data
             x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
             y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion], 1).any()):
-                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion], 2).any()):
+            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
+                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 2).any()):
                     train_buckets[label_b].append(pixels[count])
-                    pixel_matrix[pixel_coords] = 3
+                    pixel_matrix[pixel_coords + (tile_index,)] = 3
                     train_count+=1
         count += 1 
         
