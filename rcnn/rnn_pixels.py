@@ -6,7 +6,8 @@ import itertools
 from rasterio.windows import Window
 from pyproj import Proj, transform
 from tqdm import tqdm
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
+import geopandas as gpd
 import os
 import sys
 module_path = os.path.abspath(os.path.join('..'))
@@ -23,8 +24,8 @@ def make_pixels(tile_size, tile_list, shuffle=True):
     buffer = math.floor(tile_size/2)
     x = np.arange(0+buffer, 5000-buffer, tile_size)
     y = np.arange(0+buffer, 5000-buffer, tile_size)
-    for row in x:
-        for col in y:
+    for row in y:
+        for col in x:
             point = (row, col)
             points.append(point)
     #tile_list = ['028012', '029011','028011']
@@ -206,6 +207,7 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
         train_buckets[key] = []
         
     # this is for quickly checking if pixels overlap
+    # structure should be row, col, tile
     pixel_matrix = np.zeros((5000,5000, len(tile_list)))
     
     test_total = test_per_class * class_count    
@@ -213,6 +215,10 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
     train_total = train_per_class * class_count    
         
     # buffering is already done, all pix are homogenous
+    
+    exclusion_shp = gpd.read_file('exclusion.shp')
+    exclusion_shp = exclusion_shp.to_crs('PROJCS["Albers",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378140,298.2569999999957,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433],AUTHORITY["EPSG","4326"]],PROJECTION["Albers_Conic_Equal_Area"],PARAMETER["standard_parallel_1",29.5],PARAMETER["standard_parallel_2",45.5],PARAMETER["latitude_of_center",23],PARAMETER["longitude_of_center",-96],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]]]')
+    exclusion_poly = exclusion_shp.geometry[0]
     
     # test data
     # if there are still more test pixels needed overall
@@ -226,16 +232,25 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
             pixel_coords = pixels[count][0]
             landsat_tile = pixels[count][1]
             tile_index = tile_dict[landsat_tile]
-            x_loc = pixel_coords[0]
-            y_loc = pixel_coords[1]
+            # coords are of format (row, col)
+            x_loc = pixel_coords[1]
+            y_loc = pixel_coords[0]
             # create exclusion buffers where the other pixels cannot be
-            x_exclusion = np.arange(x_loc-1,x_loc+2)
-            y_exclusion = np.arange(y_loc-1,y_loc+2)
+            xmin = x_loc-1
+            xmax = x_loc+1+1
+            ymin = y_loc-1
+            ymax = y_loc+1+1
             # if that pixel doesn't fall within 1 px of existing test pixels then continue
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
-                test_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
-                pixel_matrix[pixel_coords + (tile_index,)] = 1
-                test_count+=1
+            if not(np.isin(pixel_matrix[ymin:ymax, xmin:xmax, tile_index], 1).any()):
+                # exclude the confusing mine area
+                #if label_b == 4:
+                p1 = Point(landsat_datasets[landsat_tile][0].xy(y_loc,x_loc))
+                if p1.within(exclusion_poly):
+                    pass
+                else:
+                    test_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                    pixel_matrix[pixel_coords + (tile_index,)] = 1
+                    test_count+=1
         count += 1       
     
     w_generator.close()
@@ -253,19 +268,33 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
             pixel_coords = pixels[count][0]
             landsat_tile = pixels[count][1]
             tile_index = tile_dict[landsat_tile]
-            x_loc = pixel_coords[0]
-            y_loc = pixel_coords[1]
+            x_loc = pixel_coords[1]
+            y_loc = pixel_coords[0]
             # create exclusion buffers so there is no overlap with test data
-            x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
-            y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
-                x_exclusion = np.arange(x_loc-1,x_loc+2)
-                y_exclusion = np.arange(y_loc-1,y_loc+2)
+            xmin = x_loc-tile_buffer
+            xmax = x_loc+tile_buffer+1
+            ymin = y_loc-tile_buffer
+            ymax = y_loc+tile_buffer+1
+            if not(np.isin(pixel_matrix[ymin:ymax, xmin:xmax, tile_index], 1).any()):
+                xmin = x_loc-1
+                xmax = x_loc+1+1
+                ymin = y_loc-1
+                ymax = y_loc+1+1
                 # if that pixel doesn't fall within 1 px of existing val pixels then continue
-                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 2).any()):
-                    val_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
-                    pixel_matrix[pixel_coords + (tile_index,)] = 2
-                    val_count+=1
+                if not(np.isin(pixel_matrix[ymin:ymax, xmin:xmax, tile_index], 2).any()):
+                    # exclude the confusing mine area
+                    if label_b == 4:
+                        p1 = Point(landsat_datasets[landsat_tile][0].xy(y_loc,x_loc))
+                        if p1.within(exclusion_poly):
+                            pass
+                        else:
+                            val_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                            pixel_matrix[pixel_coords + (tile_index,)] = 2
+                            val_count+=1
+                    else:
+                        val_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                        pixel_matrix[pixel_coords + (tile_index,)] = 2
+                        val_count+=1
         count += 1 
      
     w_generator.close()
@@ -284,16 +313,29 @@ def tvt_pix_locations(landsat_datasets, lc_labels, canopy_labels, tile_size, til
             pixel_coords = pixels[count][0]
             landsat_tile = pixels[count][1]
             tile_index = tile_dict[landsat_tile]
-            x_loc = pixel_coords[0]
-            y_loc = pixel_coords[1]
+            x_loc = pixel_coords[1]
+            y_loc = pixel_coords[0]
             # create exclusion buffers so there is no overlap with test data
-            x_exclusion = np.arange(x_loc-tile_buffer,x_loc+tile_buffer+1)
-            y_exclusion = np.arange(y_loc-tile_buffer,y_loc+tile_buffer+1)
-            if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 1).any()):
-                if not(np.isin(pixel_matrix[x_exclusion, y_exclusion, tile_index], 2).any()):
-                    train_buckets[label_b].append(pixels[count])
-                    pixel_matrix[pixel_coords + (tile_index,)] = 3
-                    train_count+=1
+            xmin = x_loc-tile_buffer
+            xmax = x_loc+tile_buffer+1
+            ymin = y_loc-tile_buffer
+            ymax = y_loc+tile_buffer+1
+            if not(np.isin(pixel_matrix[ymin:ymax, xmin:xmax, tile_index], 1).any()):
+                if not(np.isin(pixel_matrix[ymin:ymax, xmin:xmax, tile_index], 2).any()):
+                    if not(np.isin(pixel_matrix[x_loc, y_loc, tile_index], 3).any()):
+                        # exclude the confusing mine area
+                        if label_b == 4:
+                            p1 = Point(landsat_datasets[landsat_tile][0].xy(y_loc,x_loc))
+                            if p1.within(exclusion_poly):
+                                pass
+                            else:
+                                train_buckets[label_b].append(pixels[count]) # appends pixels to dictionary
+                                pixel_matrix[pixel_coords + (tile_index,)] = 3
+                                train_count+=1
+                        else:
+                            train_buckets[label_b].append(pixels[count])
+                            pixel_matrix[pixel_coords + (tile_index,)] = 3
+                            train_count+=1
         count += 1 
         
     w_generator.close()
