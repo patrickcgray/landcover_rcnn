@@ -68,8 +68,8 @@ class rnn_tile_gen():
                     tile = tiles_read[index][0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
                     rnn_reshaped_tile = reshape_as_image(rnn_tile).astype(np.float64)
-                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)                 
-                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
+                    #rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)                 
+                    #reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
                     reshaped_tiles.append(reshaped_tile)
                     rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data
@@ -128,17 +128,18 @@ class rnn_tile_gen():
                 rnn_tiles_read = util.read_windows(tiles_to_read, c ,r, 0, 1)
                 reshaped_tiles = []
                 rnn_reshaped_tiles = []
-                band_avg = [  345.72448081,   352.93755735,   319.34257128,   899.39728239,
-         649.46125258,   370.53562465, -1084.8218946 ]
-                band_std = [ 661.75737932,  363.32761072,  425.28671553,  959.63442896,
-        838.86193201,  501.96992987, 3562.42995552]
+                band_avg = [  366.61408946,  473.45691342,  499.77979682, 1712.39411433,
+       1351.56817468,  746.1391345 , 3994.48731099 ]
+                band_std = [ 168.1579065 ,  223.37955379,  303.91997082, 1005.7843712 ,
+        919.80111362,  626.10023407, 3846.60259933]
+                offset_scale = 0.0001
                 for index in range(len(tiles_read)):
                     rnn_tile = rnn_tiles_read[index][0:7]
                     tile = tiles_read[index][0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
                     rnn_reshaped_tile = reshape_as_image(rnn_tile).astype(np.float64)
-                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)                 
-                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
+                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std) #*offset_scale               
+                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std) #*offset_scale
                     reshaped_tiles.append(reshaped_tile)
                     rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data

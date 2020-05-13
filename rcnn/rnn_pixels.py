@@ -64,7 +64,7 @@ def train_val_test_split(pixels, train_val_ratio, val_test_ratio):
     
 def delete_bad_tiles(l8_data, lc_label, canopy_label, pixels, tile_size, buffer_pix=None):
     buffer = math.floor(tile_size / 2)
-    cloud_list = [224]#[72, 80, 96, 130, 132, 136, 160, 224]
+    cloud_list = [-999999] # nothing # high confidence cloud [224] # full list [72, 80, 96, 130, 132, 136, 160, 224]
     new_pixels = []
     l8_proj = Proj(l8_data['028012'][0].crs)
     lc_proj = Proj(lc_label.crs)
