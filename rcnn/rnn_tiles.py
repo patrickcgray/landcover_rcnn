@@ -96,7 +96,7 @@ class rnn_tile_gen():
             else: 
                 yield (image_batch, lc_batch)
     
-    def tile_generator(self, pixel_locations, batch_size, flatten=False, canopy=False):
+    def tile_generator(self, pixel_locations, batch_size, flatten=False, canopy=False, normalize=True):
         ### this is a keras compatible data generator which generates data and labels on the fly 
         ### from a set of pixel locations, a list of image datasets, and a label dataset
         bad_tiles = 0
@@ -138,8 +138,12 @@ class rnn_tile_gen():
                     tile = tiles_read[index][0:7]
                     reshaped_tile = reshape_as_image(tile).astype(np.float64)
                     rnn_reshaped_tile = reshape_as_image(rnn_tile).astype(np.float64)
-                    rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std) #*offset_scale               
-                    reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std) #*offset_scale
+                    if normalize:
+                        rnn_reshaped_tile = np.divide(np.subtract(rnn_reshaped_tile,band_avg),band_std)               
+                        reshaped_tile= np.divide(np.subtract(reshaped_tile, band_avg),band_std)
+                    else:
+                        rnn_reshaped_tile = rnn_reshaped_tile*offset_scale               
+                        reshaped_tile = reshaped_tile*offset_scale
                     reshaped_tiles.append(reshaped_tile)
                     rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data
