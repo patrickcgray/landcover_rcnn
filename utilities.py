@@ -134,6 +134,11 @@ def plot_confusion_matrix(y_true, y_pred, classes, class_dict,
     else:
         pass
     #print(cm)
+    maj_diag = np.diagonal(cm)
+    users_acc = maj_diag/np.sum(cm,axis=0)
+    prod_acc = maj_diag/np.sum(cm,axis=1)
+    
+    
 
     fig, ax = plt.subplots(figsize=(10,10))
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -160,7 +165,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, class_dict,
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
-    return ax
+    return ax, users_acc, prod_acc
 
 
 
