@@ -169,6 +169,7 @@ class rnn_tile_gen():
                 yield ({"rnn_input":rnn_image_batch, "tile_input":image_batch}, {'landcover': lc_batch, 'canopy': canopy_batch})
             else: 
                 yield (image_batch, lc_batch)
+                #yield (image_batch.reshape(batch_size,-1), lc_batch)
     # TODO there is probably an efficient scikit learn fcn for this
     # also merging can be done more efficiently with something like 
     #     lc_data_merged = np.vectorize(util.class_to_index.get)(lc_data)

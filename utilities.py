@@ -165,7 +165,7 @@ def plot_confusion_matrix(y_true, y_pred, classes, class_dict,
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
-    return ax, users_acc, prod_acc
+    return(ax, users_acc, prod_acc)
 
 
 
