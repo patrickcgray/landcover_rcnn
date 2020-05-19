@@ -1,3 +1,7 @@
+# random system and python files
 __pycache__/
 **.pyc_
 .ipynb_checkpoints
+
+# model dev
+rcnn/model_search/
