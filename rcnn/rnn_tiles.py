@@ -122,7 +122,7 @@ class rnn_tile_gen():
                     i=0
                 r, c = pixel_locations[i][0]
                 tile_num = pixel_locations[i][1]
-                lc_data = pixel_locations[i][2]
+                #lc_data = pixel_locations[i][2]
                 i += 1
                 tiles_to_read = self.l8_dict[tile_num]
                 tiles_read = util.read_windows(tiles_to_read, c ,r, buffer, tile_size)
@@ -148,14 +148,14 @@ class rnn_tile_gen():
                     reshaped_tiles.append(reshaped_tile)
                     rnn_reshaped_tiles.append(rnn_reshaped_tile)
                 ### get label data from the image, not doing this because it is in the shapefile
-                # find gps of that pixel within the image
-                #(x, y) = self.l8_dict[tile_num][0].xy(r, c) 
-                # convert the point we're sampling from to the same projection as the label dataset if necessary
-                #lc_x,lc_y = x,y
-                #canopy_x, canopy_y = x,y
-                # reference gps in label_image
-                #lc_row, lc_col = self.lc_label.index(lc_x,lc_y)
-                #lc_data = self.lc_label.read(1, window=Window(lc_col, lc_row, 1, 1))
+                #find gps of that pixel within the image
+                (x, y) = self.l8_dict[tile_num][0].xy(r, c) 
+                #convert the point we're sampling from to the same projection as the label dataset if necessary
+                lc_x,lc_y = x,y
+                canopy_x, canopy_y = x,y
+                #reference gps in label_image
+                lc_row, lc_col = self.lc_label.index(lc_x,lc_y)
+                lc_data = self.lc_label.read(1, window=Window(lc_col, lc_row, 1, 1))
                 #canopy_row, canopy_col = self.canopy_label.index(canopy_x,canopy_y)
                 #canopy_data = self.canopy_label.read(1, window=Window(canopy_col, canopy_row, 1, 1))
                 
@@ -170,9 +170,9 @@ class rnn_tile_gen():
             if canopy:
                 yield ({"rnn_input":rnn_image_batch, "tile_input":image_batch}, {'landcover': lc_batch})
             else: 
-                yield (image_batch, lc_batch)
+                #yield (image_batch, lc_batch)
                 #yield (image_batch.reshape(batch_size, tile_size, tile_size, -1), lc_batch)
-                #yield (image_batch.reshape(batch_size,-1), lc_batch)
+                yield (image_batch.reshape(batch_size,-1), lc_batch)
     # TODO there is probably an efficient scikit learn fcn for this
     # also merging can be done more efficiently with something like 
     #     lc_data_merged = np.vectorize(util.class_to_index.get)(lc_data)
@@ -182,8 +182,8 @@ class rnn_tile_gen():
         count = 0 
         for i in range(tile_size):
             for j in range(tile_size):
-                #label_index = util.class_to_index[data[i][j]]
-                #label[i][j][label_index] = 1
-                label[i][j][data] = 1
+                label_index = util.class_to_index[data[i][j]]
+                label[i][j][label_index] = 1
+                #label[i][j][data] = 1
         return label 
    
