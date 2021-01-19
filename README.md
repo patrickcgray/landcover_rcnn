@@ -20,7 +20,6 @@ To process and visualize data:
 To train the model:
 * rcnn/model_search_framework.ipynb
 * rcnn/model_search_framework_scikit.ipynb
-* 
 
 To inspect models and predict (using the pretrained model or your own version):
 * rcnn/full_tile_prediction.ipynb
