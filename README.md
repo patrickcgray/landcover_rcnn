@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository has the code needed to go along with the Remote Sensing of Environment paper "Temporally Generalizable Land Cover Classification: A Recurrent Convolutional Neural Network Unveils Major Coastal Change through Time." available at DOI: TBD. This work uses an RCNN for landcover classification of Landsat imagery across 20 years in eastern North Carolina, USA, and uncovers major change in low lying areas.
+This repository has the code needed to go along with the Remote Sensing of Environment paper "Temporally Generalizable Land Cover Classification: A Recurrent Convolutional Neural Network Unveils Major Coastal Change through Time." available at https://www.mdpi.com/2072-4292/13/19/3953. This work uses an RCNN for landcover classification of Landsat imagery across 20 years in eastern North Carolina, USA, and uncovers major change in low lying areas.
 
 All data, both preprocessed and original raw data, necessary to reproduce this work is available on the Duke Digital Repository at DOI: TBD
 
